@@ -7,10 +7,9 @@ mixins = { require('scripts/mixins/families/marid'), require('scripts/mixins/fam
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobDeath = function(mob, player, optParams)
-end
-
-entity.onMobDespawn = function(mob)
-end
+entity.spawnPoints =
+{
+    { x =  264.000, y = -23.000, z =  105.000 }
+}
 
 return entity

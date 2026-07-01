@@ -26,13 +26,17 @@
 #include "common/logging.h"
 #include "lua/luautils.h"
 
-#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 // Forward declare
 class CPPModule;
 namespace moduleutils
 {
-    void RegisterCPPModule(CPPModule* ptr);
+
+void RegisterCPPModule(CPPModule* ptr);
+
 }
 
 class CPPModule
@@ -55,6 +59,10 @@ public:
     virtual void OnCharZoneIn(CCharEntity* PChar) {};
     virtual void OnCharZoneOut(CCharEntity* PChar) {};
     virtual void OnPushPacket(CCharEntity* PChar, const std::unique_ptr<CBasicPacket>& packet) {};
+    virtual auto OnIncomingPacket(MapSession* session, CCharEntity* PChar, CBasicPacket& packet) -> bool
+    {
+        return false;
+    };
 
     template <typename T>
     static T* Register()
@@ -71,38 +79,43 @@ protected:
 
 namespace moduleutils
 {
-    void RegisterCPPModule(CPPModule* ptr);
 
-    // Hooks for calling modules
-    void OnInit();
-    void OnZoneTick(CZone* PZone);
-    void OnTimeServerTick();
-    void OnCharZoneIn(CCharEntity* PChar);
-    void OnCharZoneOut(CCharEntity* PChar);
-    void OnPushPacket(CCharEntity* PChar, const std::unique_ptr<CBasicPacket>& packet);
+void RegisterCPPModule(CPPModule* ptr);
 
-    // The program has two "states":
-    // - Load-time: As all data is being loaded and init'd
-    // - Run-time: Once the main server tick starts
-    //
-    // There are multiple points where we'd like to override
-    // the functionality of our Lua scripts, but it's hard
-    // to determine when is the correct time to apply everything.
-    //
-    // So instead, we maintain a list of overrides specified by
-    // active modules, and try multiple times during load-time
-    // to apply them - looking for whether or not the cache
-    // entry they want to modify exists.
-    //
-    // When run-time starts, we will be left with a list of
-    // overrides that were either successfully or unsuccessfully
-    // applied, and we can warn the user if there have been any
-    // problems.
+// Hooks for calling modules
+void OnInit();
+void OnZoneTick(CZone* PZone);
+void OnTimeServerTick();
+void OnCharZoneIn(CCharEntity* PChar);
+void OnCharZoneOut(CCharEntity* PChar);
+void OnPushPacket(CCharEntity* PChar, const std::unique_ptr<CBasicPacket>& packet);
+auto OnIncomingPacket(MapSession* PSession, CCharEntity* PChar, CBasicPacket& packet) -> bool;
 
-    void LoadLuaModules(IPP mapIPP);
-    void CleanupLuaModules();
-    void TryApplyLuaModules();
-    void ReportLuaModuleUsage();
+// The program has two "states":
+// - Load-time: As all data is being loaded and init'd
+// - Run-time: Once the main server tick starts
+//
+// There are multiple points where we'd like to override
+// the functionality of our Lua scripts, but it's hard
+// to determine when is the correct time to apply everything.
+//
+// So instead, we maintain a list of overrides specified by
+// active modules, and try multiple times during load-time
+// to apply them - looking for whether or not the cache
+// entry they want to modify exists.
+//
+// When run-time starts, we will be left with a list of
+// overrides that were either successfully or unsuccessfully
+// applied, and we can warn the user if there have been any
+// problems.
+
+void LoadLuaModules(IPP mapIPP);
+void CleanupLuaModules();
+void TryApplyLuaModules(const std::vector<std::string>& parts, bool isReload = false);
+void TryApplyRemainingLuaModules();
+auto GetDataModules(const std::string_view name, const std::string_view extension) -> std::vector<std::string>;
+void ReportLuaModuleUsage();
+
 }; // namespace moduleutils
 
 #endif // _MODULEUTILS_H

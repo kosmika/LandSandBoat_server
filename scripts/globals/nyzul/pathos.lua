@@ -2,7 +2,6 @@
 -- Nyzul Isle: All Pathos Logic.
 -----------------------------------
 local ID = zones[xi.zone.NYZUL_ISLE]
-require('scripts/globals/utils')
 -----------------------------------
 xi = xi or {}
 xi.nyzul = xi.nyzul or {}
@@ -123,14 +122,14 @@ local function addGearPenalty(mob)
                     end
                 end
 
-                player:addStatusEffect(effect, power, 0, 0)
+                player:addStatusEffect(effect, { power = power, origin = player })
                 handlePathosEffectFlags(player, effect)
                 player:messageSpecial(ID.text.MALFUNCTION)
                 player:messageSpecial(pathos.textId)
 
                 if player:hasPet() then
                     local pet = player:getPet()
-                    pet:addStatusEffectEx(effect, effect, power, 0, 0)
+                    pet:addStatusEffect(effect, { power = power, origin = player })
                     handlePathosEffectFlags(pet, effect)
                 end
             end
@@ -145,7 +144,7 @@ xi.nyzul.removePathos = function(instance)
     if instance:getLocalVar('floorPathos') > 0 then
         for i = 1, #xi.nyzul.pathos do
             if utils.mask.getBit(instance:getLocalVar('floorPathos'), i) then
-                local removeMessage = xi.nyzul.pathos[i].ID
+                local removeMessage = xi.nyzul.pathos[i].textId
                 local chars         = instance:getChars()
 
                 for _, players in pairs(chars) do
@@ -176,7 +175,7 @@ xi.nyzul.addFloorPathos = function(instance)
 
         for _, player in pairs(chars) do
             -- Player pathos addition.
-            player:addStatusEffect(pathos.effect, pathos.power, 0, 0)
+            player:addStatusEffect(pathos.effect, { power = pathos.power, origin = player })
             handlePathosEffectFlags(player, pathos.effect)
 
             player:messageSpecial(pathos.textId)
@@ -185,7 +184,7 @@ xi.nyzul.addFloorPathos = function(instance)
             if player:hasPet() then
                 local pet = player:getPet()
 
-                pet:addStatusEffectEx(pathos.effect, pathos.effect, pathos.power, 0, 0)
+                pet:addStatusEffect(pathos.effect, { power = pathos.power, origin = player })
                 handlePathosEffectFlags(pet, pathos.effect)
             end
         end
@@ -203,7 +202,7 @@ xi.nyzul.addPetSpawnPathos = function(player)
         if utils.mask.getBit(floorPathos, i) then
             local pathos = xi.nyzul.pathos[i]
 
-            pet:addStatusEffectEx(pathos.effect, pathos.effect, pathos.power, 0, 0)
+            pet:addStatusEffect(pathos.effect, { power = pathos.power, origin = player })
             handlePathosEffectFlags(pet, pathos.effect)
         end
     end

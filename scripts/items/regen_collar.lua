@@ -6,18 +6,25 @@
 ---@type TItem
 local itemObject = {}
 
-itemObject.onItemCheck = function(target, item, param, caster)
+itemObject.onItemCheck = function(target, item, caster)
     return 0
 end
 
-itemObject.onItemUse = function(target)
+itemObject.onItemUnequip = function(target, item)
+    target:delStatusEffect(xi.effect.ENCHANTMENT, nil, xi.effectSourceType.EQUIPPED_ITEM, xi.item.REGEN_COLLAR)
+end
+
+itemObject.onItemUse = function(target, user)
     if target:hasEquipped(xi.item.REGEN_COLLAR) then
-        if not target:hasStatusEffect(xi.effect.REGEN) then
-            target:addStatusEffect(xi.effect.REGEN, 1, 3, 120, 0, 0, 0, xi.effectSourceType.EQUIPPED_ITEM, xi.item.REGEN_COLLAR)
-        else
-            target:messageBasic(xi.msg.basic.NO_EFFECT)
-        end
+        target:addStatusEffect(xi.effect.ENCHANTMENT, { duration = 120, origin = user, sourceType = xi.effectSourceType.EQUIPPED_ITEM, sourceTypeParam = xi.item.REGEN_COLLAR })
     end
+end
+
+itemObject.onEffectGain = function(target, effect)
+    effect:addMod(xi.mod.REGEN, 1)
+end
+
+itemObject.onEffectLose = function(target, effect)
 end
 
 return itemObject

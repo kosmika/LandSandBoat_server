@@ -27,59 +27,71 @@
 #include <queue>
 
 #include "alliance.h"
+#include "aman.h"
 #include "conquest_system.h"
 #include "linkshell.h"
 #include "map_networking.h"
-#include "map_server.h"
 #include "party.h"
 #include "status_effect_container.h"
 #include "unitychat.h"
 
-#include "entities/charentity.h"
+#include "entities/char_entity.h"
 
 #include "lua/luautils.h"
 
-#include "packets/chat_message.h"
-#include "packets/linkshell_message.h"
-#include "packets/message_standard.h"
-#include "packets/message_system.h"
-#include "packets/party_invite.h"
-#include "packets/server_ip.h"
+#include "packets/s2c/0x009_message.h"
+#include "packets/s2c/0x017_chat_std.h"
+#include "packets/s2c/0x053_systemmes.h"
+#include "packets/s2c/0x0cc_linkshell_message.h"
+#include "packets/s2c/0x0dc_group_solicit_req.h"
 
+#include "gmcall_container.h"
 #include "items/item_linkshell.h"
+#include "packets/c2s/0x0b7_assist_channel.h"
 
 #include "utils/charutils.h"
 #include "utils/jailutils.h"
 #include "utils/serverutils.h"
 #include "utils/zoneutils.h"
 
-// TODO: Don't do this
-std::unique_ptr<IPCClient> ipcClient_;
-
-void message::init(MapNetworking& networking)
+namespace
 {
-    TracyZoneScoped;
 
-    ipcClient_ = std::make_unique<IPCClient>(networking);
+IPCClient* sClient = nullptr;
+
+} // namespace
+
+void message::init(IPCClient& client)
+{
+    sClient = &client;
+}
+
+auto message::detail::client() -> IPCClient&
+{
+    return *sClient;
 }
 
 void message::handle_incoming()
 {
     TracyZoneScoped;
 
-    ipcClient_->handleIncomingMessages();
+    sClient->handleIncomingMessages();
 }
 
-IPCClient::IPCClient(MapNetworking& networking)
+IPCClient::IPCClient(MapNetworking& networking, ZMQService& zmqService)
 : networking_(networking)
-, zmqDealerWrapper_(getZMQEndpointString(), getZMQRoutingId())
+, channel_(zmqService.registerDealer(getZMQEndpointString(), getZMQRoutingId()))
 {
     TracyZoneScoped;
 }
 
 auto IPCClient::getZMQEndpointString() -> std::string
 {
-    return fmt::format("tcp://{}:{}", settings::get<std::string>("network.ZMQ_IP"), settings::get<uint16>("network.ZMQ_PORT"));
+    return fmt::format(
+        "{}://{}:{}",
+        settings::get<std::string>("network.ZMQ_TRANSPORT"),
+        settings::get<std::string>("network.ZMQ_IP"),
+        settings::get<uint16>("network.ZMQ_PORT"));
 }
 
 auto IPCClient::getZMQRoutingId() -> uint64
@@ -114,10 +126,12 @@ void IPCClient::handleIncomingMessages()
 
     // TODO: Can we stop more messages appearing on the queue while we're processing?
     zmq::message_t out;
-    while (zmqDealerWrapper_.incomingQueue_.try_dequeue(out))
+    while (channel_.tryReceive(out))
     {
         const auto firstByte = out.data<uint8>()[0];
         const auto msgType   = ipc::toString(static_cast<ipc::MessageType>(firstByte));
+
+        LogWith({ "ipc_msg", msgType });
 
         // TODO: Make an IPP for the world server, so we can use it here
         DebugIPCFmt("Incoming {} message", msgType);
@@ -133,21 +147,60 @@ void IPCClient::handleMessage_EmptyStruct(const IPP& ipp, const ipc::EmptyStruct
     ShowWarningFmt("Received EmptyStruct message from {} - this is probably a bug", ipp.toString());
 }
 
-void IPCClient::handleMessage_CharLogin(const IPP& ipp, const ipc::CharLogin& message)
+void IPCClient::handleMessage_AccountLogin(const IPP& ipp, const ipc::AccountLogin& message)
 {
     TracyZoneScoped;
 
-    CCharEntity* PChar = zoneutils::GetChar(message.charId);
-    if (!PChar)
+    if (auto session = networking_.sessions().getSessionByAccountId(message.accountId))
     {
-        db::preparedStmt("DELETE FROM accounts_sessions WHERE charid = ?", message.charId);
-    }
-    else
-    {
-        // TODO: disconnect the client, but leave the character in the disconnecting state
-        // PChar->status = STATUS_SHUTDOWN;
-        // won't save their position but not a huge deal
-        // PChar->pushPacket<CServerIPPacket>(PChar, 1, 0);
+        session->forceLinkDead = true; // Don't accept any more updates for last packet received time
+
+        // Extreme overkill but...
+        // Scramble key so server rejects input
+        for (uint32_t& i : session->blowfish.key)
+        {
+            i = xirand::GetRandomNumber<uint32_t>(std::numeric_limits<uint32_t>::max());
+        }
+
+        for (uint32_t& i : session->prev_blowfish.key)
+        {
+            i = xirand::GetRandomNumber<uint32_t>(std::numeric_limits<uint32_t>::max());
+        }
+
+        for (uint32_t& i : session->blowfish.P)
+        {
+            i = xirand::GetRandomNumber<uint32_t>(std::numeric_limits<uint32_t>::max());
+        }
+
+        for (uint32_t& i : session->prev_blowfish.P)
+        {
+            i = xirand::GetRandomNumber<uint32_t>(std::numeric_limits<uint32_t>::max());
+        }
+
+        for (uint8_t& i : session->blowfish.hash)
+        {
+            // uniform_int_distribution doesnt like uint8_t, so do some workaround
+            i = static_cast<uint8_t>(xirand::GetRandomNumber<uint16_t>(std::numeric_limits<uint16_t>::max()) % 255);
+        }
+
+        for (uint8_t& i : session->prev_blowfish.hash)
+        {
+            // uniform_int_distribution doesnt like uint8_t, so do some workaround
+            i = static_cast<uint8_t>(xirand::GetRandomNumber<uint16_t>(std::numeric_limits<uint16_t>::max()) % 255);
+        }
+
+        for (int i = 0; i < 4; i++)
+        {
+            for (uint32_t& x : session->blowfish.S[i])
+            {
+                x = xirand::GetRandomNumber<uint32_t>(std::numeric_limits<uint32_t>::max());
+            }
+
+            for (uint32_t& x : session->prev_blowfish.S[i])
+            {
+                x = xirand::GetRandomNumber<uint32_t>(std::numeric_limits<uint32_t>::max());
+            }
+        }
     }
 }
 
@@ -155,11 +208,17 @@ void IPCClient::handleMessage_CharZone(const IPP& ipp, const ipc::CharZone& mess
 {
     TracyZoneScoped;
 
-    // TODO: This is mainly for telling the world server that a character has zoned,
-    //     : but maybe it would be useful here too?
+    auto session = networking_.sessions().getSessionByCharId(message.charId);
 
-    std::ignore = message.charId;
-    std::ignore = message.destinationZoneId;
+    if (session) // Update in case of edge case
+    {
+        session->tapLastUpdate();
+    }
+    else
+    {
+        // Create a pending session that the character might use ahead of time
+        networking_.sessions().createPendingSession(message.charId);
+    }
 }
 
 void IPCClient::handleMessage_CharVarUpdate(const IPP& ipp, const ipc::CharVarUpdate& message)
@@ -197,7 +256,7 @@ void IPCClient::handleMessage_ChatMessageTell(const IPP& ipp, const ipc::ChatMes
         }
         else
         {
-            PChar->pushPacket(std::make_unique<CChatMessagePacket>(PChar, MESSAGE_TELL, message.message, message.senderName));
+            PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_CHAT_STD>(PChar, MESSAGE_TELL, message.message, message.senderName));
         }
     }
     else
@@ -237,7 +296,7 @@ void IPCClient::handleMessage_ChatMessageParty(const IPP& ipp, const ipc::ChatMe
     });
     if (PParty)
     {
-        PParty->PushPacket(message.senderId, 0, std::make_unique<CChatMessagePacket>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
+        PParty->PushPacket(message.senderId, 0, std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
     }
     // clang-format on
 }
@@ -257,7 +316,7 @@ void IPCClient::handleMessage_ChatMessageAlliance(const IPP& ipp, const ipc::Cha
     {
         PZone->ForEachChar([allianceid, &PAlliance](CCharEntity* PChar)
         {
-            if (PChar->PParty && PChar->PParty && PChar->PParty->m_PAlliance && PChar->PParty->m_PAlliance->m_AllianceID == allianceid)
+            if (PChar->PParty && PChar->PParty->m_PAlliance && PChar->PParty->m_PAlliance->m_AllianceID == allianceid)
             {
                 PAlliance = PChar->PParty->m_PAlliance;
                 return;
@@ -272,7 +331,7 @@ void IPCClient::handleMessage_ChatMessageAlliance(const IPP& ipp, const ipc::Cha
     {
         for (const auto& currentParty : PAlliance->partyList)
         {
-            currentParty->PushPacket(message.senderId, 0, std::make_unique<CChatMessagePacket>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
+            currentParty->PushPacket(message.senderId, 0, std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
         }
     }
     // clang-format on
@@ -285,7 +344,7 @@ void IPCClient::handleMessage_ChatMessageLinkshell(const IPP& ipp, const ipc::Ch
     if (CLinkshell* PLinkshell = linkshell::GetLinkshell(message.linkshellId))
     {
         // TODO: Linkshell 1 vs 2?
-        PLinkshell->PushPacket(message.senderId, std::make_unique<CChatMessagePacket>(message.senderName, message.zoneId, MESSAGE_LINKSHELL, message.message, message.gmLevel));
+        PLinkshell->PushPacket(message.senderId, std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message.senderName, message.zoneId, MESSAGE_LINKSHELL, message.message, message.gmLevel));
     }
 }
 
@@ -295,7 +354,7 @@ void IPCClient::handleMessage_ChatMessageUnity(const IPP& ipp, const ipc::ChatMe
 
     if (CUnityChat* PUnityChat = unitychat::GetUnityChat(message.unityLeaderId))
     {
-        PUnityChat->PushPacket(message.senderId, std::make_unique<CChatMessagePacket>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
+        PUnityChat->PushPacket(message.senderId, std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
     }
 }
 
@@ -313,7 +372,32 @@ void IPCClient::handleMessage_ChatMessageYell(const IPP& ipp, const ipc::ChatMes
                 // Don't push to sender
                 if (PChar->id != message.senderId)
                 {
-                    PChar->pushPacket(std::make_unique<CChatMessagePacket>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
+                    PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
+                }
+            });
+        }
+    });
+    // clang-format on
+}
+
+void IPCClient::handleMessage_ChatMessageAssist(const IPP& ipp, const ipc::ChatMessageAssist& message) const
+{
+    TracyZoneScoped;
+
+    // clang-format off
+    zoneutils::ForEachZone([&](CZone* PZone)
+    {
+        if (PZone->CanUseMisc(MISC_ASSIST))
+        {
+            PZone->ForEachChar([&](CCharEntity* PChar)
+            {
+                // Don't push to sender
+                if (PChar->id != message.senderId)
+                {
+                    if (PChar->aman().isAssistChannelEligible())
+                    {
+                        PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message));
+                    }
                 }
             });
         }
@@ -335,7 +419,7 @@ void IPCClient::handleMessage_ChatMessageServerMessage(const IPP& ipp, const ipc
                 return;
             }
 
-            PChar->pushPacket(std::make_unique<CChatMessagePacket>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
+            PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_CHAT_STD>(message.senderName, message.zoneId, message.messageType, message.message, message.gmLevel));
         });
     });
     // clang-format on
@@ -348,7 +432,7 @@ void IPCClient::handleMessage_ChatMessageCustom(const IPP& ipp, const ipc::ChatM
     CCharEntity* PChar = zoneutils::GetChar(message.recipientId);
     if (PChar && PChar->status != STATUS_TYPE::DISAPPEAR && !jailutils::InPrison(PChar))
     {
-        PChar->pushPacket(std::make_unique<CChatMessagePacket>(PChar, message.messageType, message.message, message.senderName));
+        PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_CHAT_STD>(PChar, message.messageType, message.message, message.senderName));
     }
 }
 
@@ -362,8 +446,8 @@ void IPCClient::handleMessage_PartyInvite(const IPP& ipp, const ipc::PartyInvite
         if (PInvitee->isDead() ||
             jailutils::InPrison(PInvitee) ||
             PInvitee->InvitePending.id != 0 ||
-            (PInvitee->PParty && message.inviteType == INVITE_PARTY) ||
-            (message.inviteType == INVITE_ALLIANCE && (!PInvitee->PParty || PInvitee->PParty->GetLeader() != PInvitee || (PInvitee->PParty && PInvitee->PParty->m_PAlliance))))
+            (PInvitee->PParty && message.inviteType == PartyKind::Party) ||
+            (message.inviteType == PartyKind::Alliance && (!PInvitee->PParty || PInvitee->PParty->GetLeader() != PInvitee || (PInvitee->PParty && PInvitee->PParty->m_PAlliance))))
         {
             message::send(ipc::MessageStandard{
                 .recipientId = message.inviterId,
@@ -382,7 +466,7 @@ void IPCClient::handleMessage_PartyInvite(const IPP& ipp, const ipc::PartyInvite
             });
 
             // Interaction was blocked
-            PInvitee->pushPacket<CMessageSystemPacket>(0, 0, MsgStd::BlockedByBlockaid);
+            PInvitee->pushPacket<GP_SERV_COMMAND_SYSTEMMES>(0, 0, MsgStd::BlockedByBlockaid);
 
             // You cannot invite that person at this time.
             message::send(ipc::MessageStandard{
@@ -393,7 +477,7 @@ void IPCClient::handleMessage_PartyInvite(const IPP& ipp, const ipc::PartyInvite
             return;
         }
 
-        if (PInvitee->StatusEffectContainer->HasStatusEffect(EFFECT_LEVEL_SYNC))
+        if (PInvitee->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::LevelSync))
         {
             message::send(ipc::MessageStandard{
                 .recipientId = message.inviterId,
@@ -406,7 +490,7 @@ void IPCClient::handleMessage_PartyInvite(const IPP& ipp, const ipc::PartyInvite
         PInvitee->InvitePending.id     = message.inviterId;
         PInvitee->InvitePending.targid = message.inviterTargId;
 
-        PInvitee->pushPacket(std::make_unique<CPartyInvitePacket>(message.inviterId, message.inviterTargId, message.inviterName, message.inviteType));
+        PInvitee->pushPacket(std::make_unique<GP_SERV_COMMAND_GROUP_SOLICIT_REQ>(message.inviterId, message.inviterTargId, message.inviterName, message.inviteType));
     }
 }
 
@@ -419,14 +503,16 @@ void IPCClient::handleMessage_PartyInviteResponse(const IPP& ipp, const ipc::Par
     {
         if (message.inviteAnswer == 0)
         {
-            PInviter->pushPacket<CMessageStandardPacket>(PInviter, 0, 0, MsgStd::InvitationDeclined);
+            PInviter->pushPacket<GP_SERV_COMMAND_MESSAGE>(PInviter, 0, 0, MsgStd::InvitationDeclined);
         }
         else
         {
             // both party leaders?
             const auto rset = db::preparedStmt("SELECT * FROM accounts_parties WHERE partyid <> 0 AND "
                                                "((charid = ? OR charid = ?) AND partyflag & ?)",
-                                               message.inviterId, message.inviteeId, PARTY_LEADER);
+                                               message.inviterId,
+                                               message.inviteeId,
+                                               PARTY_LEADER);
             if (rset && rset->rowsCount() == 2)
             {
                 if (PInviter->PParty)
@@ -603,7 +689,16 @@ void IPCClient::handleMessage_MessageStandard(const IPP& ipp, const ipc::Message
 
     if (CCharEntity* PChar = zoneutils::GetChar(message.recipientId))
     {
-        PChar->pushPacket(std::make_unique<CMessageStandardPacket>(PChar, message.param0, message.param1, message.message));
+        // TODO: Exchange the packet struct over IPC to avoid having to match one-offs.
+        // This matches messages with just a string parameter.
+        if (message.string2.size() > 0 && message.param0 == 0 && message.param1 == 0)
+        {
+            PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_MESSAGE>(message.string2, message.message));
+        }
+        else
+        {
+            PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_MESSAGE>(PChar, message.param0, message.param1, message.message));
+        }
     }
 }
 
@@ -613,7 +708,7 @@ void IPCClient::handleMessage_MessageSystem(const IPP& ipp, const ipc::MessageSy
 
     if (CCharEntity* PChar = zoneutils::GetChar(message.recipientId))
     {
-        PChar->pushPacket(std::make_unique<CMessageStandardPacket>(PChar, message.param0, message.param1, message.message));
+        PChar->pushPacket(std::make_unique<GP_SERV_COMMAND_MESSAGE>(PChar, message.param0, message.param1, message.message));
     }
 }
 
@@ -623,7 +718,7 @@ void IPCClient::handleMessage_LinkshellRankChange(const IPP& ipp, const ipc::Lin
 
     if (CLinkshell* PLinkshell = linkshell::GetLinkshell(message.linkshellId))
     {
-        PLinkshell->ChangeMemberRank(message.memberName, message.permission);
+        PLinkshell->ChangeMemberRank(message.memberName, message.requesterRank, message.newRank);
     }
 }
 
@@ -636,17 +731,17 @@ void IPCClient::handleMessage_LinkshellRemove(const IPP& ipp, const ipc::Linkshe
     if (PChar && PChar->PLinkshell1 && PChar->PLinkshell1->getID() == message.linkshellId)
     {
         CItemLinkshell* targetLS = (CItemLinkshell*)PChar->getEquip(SLOT_LINK1);
-        if (targetLS && (message.linkshellType == LSTYPE_LINKSHELL || (message.linkshellType == LSTYPE_PEARLSACK && targetLS->GetLSType() == LSTYPE_LINKPEARL)))
+        if (targetLS && (message.requesterRank == LSTYPE_LINKSHELL || (message.requesterRank == LSTYPE_PEARLSACK && targetLS->GetLSType() == LSTYPE_LINKPEARL)))
         {
-            PChar->PLinkshell1->RemoveMemberByName(message.victimName, (targetLS->GetLSType() == (uint8)LSTYPE_LINKSHELL ? (uint8)LSTYPE_PEARLSACK : message.linkshellType));
+            PChar->PLinkshell1->RemoveMemberByName(message.victimName, message.requesterRank);
         }
     }
     else if (PChar && PChar->PLinkshell2 && PChar->PLinkshell2->getID() == message.linkshellId)
     {
         CItemLinkshell* targetLS = (CItemLinkshell*)PChar->getEquip(SLOT_LINK2);
-        if (targetLS && (message.linkshellType == LSTYPE_LINKSHELL || (message.linkshellType == LSTYPE_PEARLSACK && targetLS->GetLSType() == LSTYPE_LINKPEARL)))
+        if (targetLS && (message.requesterRank == LSTYPE_LINKSHELL || (message.requesterRank == LSTYPE_PEARLSACK && targetLS->GetLSType() == LSTYPE_LINKPEARL)))
         {
-            PChar->PLinkshell2->RemoveMemberByName(message.victimName, message.linkshellType);
+            PChar->PLinkshell2->RemoveMemberByName(message.victimName, message.requesterRank);
         }
     }
 }
@@ -657,7 +752,7 @@ void IPCClient::handleMessage_LinkshellSetMessage(const IPP& ipp, const ipc::Lin
 
     if (CLinkshell* PLinkshell = linkshell::GetLinkshell(message.linkshellId))
     {
-        PLinkshell->PushPacket(0, std::make_unique<CLinkshellMessagePacket>(message.poster, message.message, message.linkshellName, message.postTime, LinkshellSlot::LS1));
+        PLinkshell->PushPacket(0, std::make_unique<GP_SERV_COMMAND_LINKSHELL_MESSAGE>(message.poster, message.message, message.linkshellName, message.postTime, LinkshellSlot::LS1));
     }
 }
 
@@ -689,6 +784,19 @@ void IPCClient::handleMessage_KillSession(const IPP& ipp, const ipc::KillSession
         else
         {
             ShowDebugFmt("KillSession for charid {} not needed", message.victimId);
+        }
+    }
+
+    if (auto sessionToDelete = networking_.sessions().getPendingSessionByCharId(message.victimId))
+    {
+        if (sessionToDelete->blowfish.status == BLOWFISH_PENDING_ZONE)
+        {
+            ShowDebugFmt("Closing pending session of charid {} on request of other process", message.victimId);
+            networking_.sessions().destroySession(sessionToDelete);
+        }
+        else
+        {
+            // ShowDebugFmt("KillSession for charid {} not needed", message.victimId); // noisy
         }
     }
 }
@@ -808,7 +916,13 @@ void IPCClient::handleMessage_EntityInformationResponse(const IPP& ipp, const ip
 
             PChar->clearPacketList();
 
-            charutils::SendToZone(PChar, PChar->loc.destination);
+            PChar->requestedZoneChange = true;
+
+            // Save pet if any
+            if (PChar->shouldPetPersistThroughZoning())
+            {
+                PChar->setPetZoningInfo();
+            }
         }
     }
 }
@@ -835,7 +949,55 @@ void IPCClient::handleMessage_SendPlayerToLocation(const IPP& ipp, const ipc::Se
 
         PChar->clearPacketList();
 
-        charutils::SendToZone(PChar, PChar->loc.destination);
+        PChar->requestedWarp = true;
+
+        // Save pet if any
+        if (PChar->shouldPetPersistThroughZoning())
+        {
+            PChar->setPetZoningInfo();
+        }
+    }
+}
+
+void IPCClient::handleMessage_AssistChannelEvent(const IPP& ipp, const ipc::AssistChannelEvent& message) const
+{
+    TracyZoneScoped;
+
+    CCharEntity* PChar = zoneutils::GetChar(message.receiverId);
+    if (!PChar)
+    {
+        return;
+    }
+
+    switch (static_cast<GP_CLI_COMMAND_ASSIST_CHANNEL_KIND>(message.action))
+    {
+        case GP_CLI_COMMAND_ASSIST_CHANNEL_KIND::AddToMuteList:
+            PChar->aman().mute(message.senderId);
+            break;
+        case GP_CLI_COMMAND_ASSIST_CHANNEL_KIND::RemoveFromMuteList:
+            PChar->aman().unmute(message.senderId);
+            break;
+        case GP_CLI_COMMAND_ASSIST_CHANNEL_KIND::GiveThumbsUp:
+            PChar->aman().addThumbsUp(message.senderId);
+            break;
+        case GP_CLI_COMMAND_ASSIST_CHANNEL_KIND::IssueWarning:
+            PChar->aman().addThumbsDown(message.senderId);
+            break;
+    }
+}
+
+void IPCClient::handleMessage_GMCallRequest(const IPP& ipp, const ipc::GMCallRequest& message)
+{
+    TracyZoneScoped;
+}
+
+void IPCClient::handleMessage_GMCallResponse(const IPP& ipp, const ipc::GMCallResponse& message)
+{
+    TracyZoneScoped;
+
+    if (CCharEntity* PChar = zoneutils::GetChar(message.charId))
+    {
+        PChar->gmCallContainer().sendPendingResponse(PChar);
     }
 }
 

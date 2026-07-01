@@ -25,14 +25,23 @@
 
 // sol changes this behavior to return 0 rather than truncating
 // we rely on that, so change it back
+// clang-format off
 #undef lua_tointeger
 #define lua_tointeger(L, n) static_cast<lua_Integer>(std::floor(lua_tonumber(L, n)))
 
 #define SOL_USERTYPE(TypeName, BindingTypeName) \
-    std::string className = TypeName;           \
-    lua.new_usertype<BindingTypeName>(className)
+    std::string className   = TypeName;         \
+    auto        typeBuilder = lua.new_usertype<BindingTypeName>(className)
+
+#define SOL_USERTYPE_INHERIT(TypeName, BindingTypeName, ...)                         \
+    std::string className   = TypeName;                                              \
+    auto        typeBuilder = lua.new_usertype<BindingTypeName>(className,           \
+                                                                sol::no_constructor, \
+                                                                sol::base_classes, sol::bases<__VA_ARGS__>())
 
 #define SOL_REGISTER(FuncName, Func) lua[className][FuncName] = &Func
+
+#define SOL_READONLY(PropName, Func) typeBuilder[PropName] = sol::readonly_property(&Func)
 
 #define SOL_BIND_DEC(LuaType, CppType) \
     int sol_lua_push(sol::types<CppType*>, lua_State* L, CppType* obj);
@@ -51,6 +60,16 @@
     {                                                                                                     \
         return obj ? sol::stack::push<LuaType>(L, (BaseCppType*)obj) : sol::stack::push(L, sol::lua_nil); \
     }
+
+#define SOL_BIND_DEC_CONST(LuaType, CppType) \
+    int sol_lua_push(sol::types<const CppType*>, lua_State* L, const CppType* obj);
+
+#define SOL_BIND_DEF_CONST(LuaType, CppType)                                                \
+    int sol_lua_push(sol::types<const CppType*>, lua_State* L, const CppType* obj)          \
+    {                                                                                       \
+        return obj ? sol::stack::push<LuaType>(L, obj) : sol::stack::push(L, sol::lua_nil); \
+    }
+// clang-format on
 
 //
 // Class bindings
@@ -100,6 +119,7 @@ SOL_BIND_DEC(CLuaInstance, CInstance);
 class CLuaItem;
 class CItem;
 SOL_BIND_DEC(CLuaItem, CItem);
+SOL_BIND_DEC_CONST(CLuaItem, CItem);
 
 class CItemCurrency;
 class CItemEquipment;
@@ -135,6 +155,10 @@ SOL_BIND_DEC(CLuaMobSkill, CMobSkill);
 class CLuaPetSkill;
 class CPetSkill;
 SOL_BIND_DEC(CLuaPetSkill, CPetSkill);
+
+class CLuaWeaponSkillSkill;
+class CWeaponSkill;
+SOL_BIND_DEC(CLuaWeaponSkill, CWeaponSkill);
 
 class CLuaSpell;
 class CSpell;

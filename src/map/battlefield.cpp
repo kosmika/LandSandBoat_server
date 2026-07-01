@@ -29,28 +29,27 @@
 
 #include "enmity_container.h"
 
-#include "entities/baseentity.h"
-#include "entities/battleentity.h"
-#include "entities/charentity.h"
-#include "entities/mobentity.h"
-#include "entities/npcentity.h"
-#include "entities/trustentity.h"
+#include "entities/base_entity.h"
+#include "entities/battle_entity.h"
+#include "entities/char_entity.h"
+#include "entities/mob_entity.h"
+#include "entities/npc_entity.h"
+#include "entities/trust_entity.h"
 
 #include "lua/luautils.h"
 
-#include "packets/entity_animation.h"
 #include "packets/entity_update.h"
-#include "packets/message_basic.h"
-#include "packets/position.h"
+#include "packets/s2c/0x038_schedulor.h"
 
 #include "status_effect_container.h"
-#include "treasure_pool.h"
 
+#include "enums/four_cc.h"
 #include "utils/charutils.h"
 #include "utils/itemutils.h"
 #include "utils/petutils.h"
 #include "utils/zoneutils.h"
 #include "zone.h"
+
 #include <chrono>
 
 CBattlefield::CBattlefield(uint16 id, CZone* PZone, uint8 area, CCharEntity* PInitiator)
@@ -60,7 +59,7 @@ CBattlefield::CBattlefield(uint16 id, CZone* PZone, uint8 area, CCharEntity* PIn
 , m_Area(area)
 , m_Record(BattlefieldRecord_t())
 , m_Rules(0)
-, m_StartTime(server_clock::now())
+, m_StartTime(timer::now())
 , m_LastPromptTime(0s)
 , m_MaxParticipants(8)
 , m_LevelCap(0)
@@ -76,6 +75,7 @@ CBattlefield::CBattlefield(uint16 id, CZone* PZone, uint8 area, CCharEntity* PIn
 
 CBattlefield::~CBattlefield()
 {
+    m_groups.clear();
     luautils::OnBattlefieldDestroy(this);
 }
 
@@ -94,7 +94,7 @@ uint16 CBattlefield::GetZoneID() const
     return m_Zone->GetID();
 }
 
-std::string const& CBattlefield::GetName() const
+const std::string& CBattlefield::GetName() const
 {
     return m_Name;
 }
@@ -124,50 +124,50 @@ uint16 CBattlefield::GetRuleMask() const
     return m_Rules;
 }
 
-time_point CBattlefield::GetStartTime() const
+timer::time_point CBattlefield::GetStartTime() const
 {
     return m_StartTime;
 }
 
-duration CBattlefield::GetTimeInside() const
+timer::duration CBattlefield::GetTimeInside() const
 {
     return m_Tick - m_StartTime;
 }
 
-time_point CBattlefield::GetFightTime() const
+timer::time_point CBattlefield::GetFightTime() const
 {
     return m_FightTick;
 }
 
-duration CBattlefield::GetTimeLimit() const
+timer::duration CBattlefield::GetTimeLimit() const
 {
     return m_TimeLimit;
 }
 
-time_point CBattlefield::GetWipeTime() const
+timer::time_point CBattlefield::GetWipeTime() const
 {
     return m_WipeTime;
 }
 
-duration CBattlefield::GetFinishTime() const
+timer::duration CBattlefield::GetFinishTime() const
 {
     return m_FinishTime;
 }
 
-duration CBattlefield::GetRemainingTime() const
+timer::duration CBattlefield::GetRemainingTime() const
 {
-    return GetTimeLimit() > GetTimeInside() ? GetTimeLimit() - GetTimeInside() : duration(0);
+    return GetTimeLimit() > GetTimeInside() ? GetTimeLimit() - GetTimeInside() : timer::duration(0);
 }
 
-duration CBattlefield::GetLastTimeUpdate() const
+timer::duration CBattlefield::GetLastTimeUpdate() const
 {
     return m_LastPromptTime;
 }
 
-uint64_t CBattlefield::GetLocalVar(std::string const& name) const
+uint64_t CBattlefield::GetLocalVar(const std::string& name) const
 {
-    auto var = m_LocalVars.find(name);
-    return var != m_LocalVars.end() ? var->second : 0;
+    auto var = localVars_.find(name);
+    return var != localVars_.end() ? var->second : 0;
 }
 
 size_t CBattlefield::GetMaxParticipants() const
@@ -190,17 +190,17 @@ uint32 CBattlefield::GetArmouryCrate() const
     return m_armouryCrate;
 }
 
-void CBattlefield::SetName(std::string const& name)
+void CBattlefield::SetName(const std::string& name)
 {
     m_Name = name;
 }
 
-void CBattlefield::SetInitiator(std::string const& name)
+void CBattlefield::SetInitiator(const std::string& name)
 {
     m_Initiator.name = name;
 }
 
-void CBattlefield::SetTimeLimit(duration time)
+void CBattlefield::SetTimeLimit(timer::duration time)
 {
     m_TimeLimit      = time;
     m_LastPromptTime = time;
@@ -214,7 +214,7 @@ void CBattlefield::SetTimeLimit(duration time)
     }
 }
 
-void CBattlefield::SetWipeTime(time_point time)
+void CBattlefield::SetWipeTime(timer::time_point time)
 {
     m_WipeTime = time;
 }
@@ -224,7 +224,7 @@ void CBattlefield::SetArea(uint8 area)
     m_Area = area;
 }
 
-void CBattlefield::SetRecord(std::string const& name, duration time, size_t partySize)
+void CBattlefield::SetRecord(const std::string& name, timer::duration time, size_t partySize)
 {
     m_Record.name      = !name.empty() ? name : m_Initiator.name;
     m_Record.time      = time;
@@ -252,12 +252,12 @@ void CBattlefield::SetLevelCap(uint8 cap)
     m_LevelCap = cap;
 }
 
-void CBattlefield::SetLocalVar(std::string const& name, uint64_t value)
+void CBattlefield::SetLocalVar(const std::string& name, uint64_t value)
 {
-    m_LocalVars[name] = value;
+    localVars_[name] = value;
 }
 
-void CBattlefield::SetLastTimeUpdate(duration time)
+void CBattlefield::SetLastTimeUpdate(timer::duration time)
 {
     m_LastPromptTime = time;
 }
@@ -282,18 +282,19 @@ void CBattlefield::ApplyLevelRestrictions(CCharEntity* PChar) const
             cap = settings::get<uint8>("main.MAX_LEVEL"); // Cap to server max level to strip buffs - this is the retail diff between uncapped and capped to max lv.
         }
 
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_DISPELABLE, true);
-        PChar->StatusEffectContainer->AddStatusEffect(new CStatusEffect(EFFECT_LEVEL_RESTRICTION, EFFECT_LEVEL_RESTRICTION, cap, 0, 0));
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Dispelable, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::Reraise);
+        PChar->StatusEffectContainer->AddStatusEffect(xi::StatusEffect::LevelRestriction, static_cast<uint16>(xi::StatusEffect::LevelRestriction), cap, 0s, 0s);
     }
     else
     {
-        PChar->StatusEffectContainer->DelStatusEffect(EFFECT_LEVEL_RESTRICTION);
+        PChar->StatusEffectContainer->DelStatusEffect(xi::StatusEffect::LevelRestriction);
     }
 
     // Check if we should remove SJ, whether or not there is a lv cap.
     if (!(m_Rules & BCRULES::RULES_ALLOW_SUBJOBS))
     {
-        PChar->StatusEffectContainer->AddStatusEffect(new CStatusEffect(EFFECT_SJ_RESTRICTION, EFFECT_SJ_RESTRICTION, 0, 0, 0));
+        PChar->StatusEffectContainer->AddStatusEffect(xi::StatusEffect::SjRestriction, static_cast<uint16>(xi::StatusEffect::SjRestriction), 0, 0s, 0s);
     }
 }
 
@@ -420,7 +421,7 @@ bool CBattlefield::InsertEntity(CBaseEntity* PEntity, bool enter, BATTLEFIELDMOB
     // mob, initiator or ally
     if (entity)
     {
-        CStatusEffect* PBattlefieldEffect = entity->StatusEffectContainer->GetStatusEffect(EFFECT_BATTLEFIELD);
+        CStatusEffect* PBattlefieldEffect = entity->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::Battlefield);
         // Update battlefield ID if battlefield effect exists
         // Tango with a Tracker/Requiem of Sin corner case where NPC IDs are shared between BCs as per retail caps
         if (PBattlefieldEffect)
@@ -429,8 +430,8 @@ bool CBattlefield::InsertEntity(CBaseEntity* PEntity, bool enter, BATTLEFIELDMOB
         }
         else
         {
-            entity->StatusEffectContainer->AddStatusEffect(
-                new CStatusEffect(EFFECT_BATTLEFIELD, EFFECT_BATTLEFIELD, this->GetID(), 0, 0, m_Initiator.id, this->GetArea()), true);
+            entity->StatusEffectContainer->AddStatusEffectSilent(
+                xi::StatusEffect::Battlefield, static_cast<uint16>(xi::StatusEffect::Battlefield), this->GetID(), 0s, 0s, m_Initiator.id, this->GetArea());
         }
     }
 
@@ -523,13 +524,32 @@ bool CBattlefield::RemoveEntity(CBaseEntity* PEntity, uint8 leavecode)
         return false;
     }
 
+    // Clear timer queue for entity before removal
+    if (PEntity->PAI)
+    {
+        PEntity->PAI->ClearTimerQueue();
+    }
+
+    if (auto* PChar = dynamic_cast<CCharEntity*>(PEntity))
+    {
+        if (PChar->PPet && PChar->PPet->PAI)
+        {
+            PChar->PPet->PAI->ClearTimerQueue();
+        }
+    }
+
     auto found = false;
     if (PEntity->objtype == TYPE_PC)
     {
         auto* PChar = dynamic_cast<CCharEntity*>(PEntity);
+        if (!PChar)
+        {
+            return false;
+        }
+
         if (!(m_Rules & BCRULES::RULES_ALLOW_SUBJOBS))
         {
-            PChar->StatusEffectContainer->DelStatusEffect(EFFECT_SJ_RESTRICTION);
+            PChar->StatusEffectContainer->DelStatusEffect(xi::StatusEffect::SjRestriction);
         }
 
         // Release charmed pet when master leaves battlefield
@@ -538,13 +558,25 @@ bool CBattlefield::RemoveEntity(CBaseEntity* PEntity, uint8 leavecode)
             petutils::DetachPet(PChar);
         }
 
+        // Remove Battlefield effect from Trusts
+        if (!PChar->PTrusts.empty())
+        {
+            for (auto* PTrust : PChar->PTrusts)
+            {
+                if (PTrust && PTrust->StatusEffectContainer)
+                {
+                    PTrust->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
+                }
+            }
+        }
+
         m_Zone->updateCharLevelRestriction(PChar);
 
-        if (leavecode == BATTLEFIELD_LEAVE_CODE_EXIT && PChar->StatusEffectContainer->HasStatusEffectByFlag(EFFECTFLAG_CONFRONTATION))
+        if (leavecode == BATTLEFIELD_LEAVE_CODE_EXIT && PChar->StatusEffectContainer->HasStatusEffectByFlag(xi::StatusEffectFlag::Confrontation))
         {
             if (GetStatus() == BATTLEFIELD_STATUS_LOCKED)
             {
-                PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+                PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
             }
             else
             {
@@ -561,7 +593,7 @@ bool CBattlefield::RemoveEntity(CBaseEntity* PEntity, uint8 leavecode)
             }
         }
 
-        m_EnteredPlayers.erase(m_EnteredPlayers.find(PEntity->id));
+        m_EnteredPlayers.erase(PEntity->id);
 
         if (leavecode != 255)
         {
@@ -665,16 +697,17 @@ bool CBattlefield::RemoveEntity(CBaseEntity* PEntity, uint8 leavecode)
                 PMob->PEnmityContainer->Clear();
             }
         }
-        PEntity->loc.zone->PushPacket(PEntity, CHAR_INRANGE, std::make_unique<CEntityAnimationPacket>(PEntity, PEntity, CEntityAnimationPacket::Fade_Out));
+        PEntity->loc.zone->PushPacket(PEntity, CHAR_INRANGE, std::make_unique<GP_SERV_COMMAND_SCHEDULOR>(PEntity, PEntity, FourCC::FadeOut));
     }
 
     PEntity->PBattlefield = nullptr;
     return found;
 }
 
-void CBattlefield::onTick(time_point time)
+void CBattlefield::onTick(timer::time_point time)
 {
     TracyZoneScoped;
+
     if (!m_Attacked)
     {
         CheckInProgress();
@@ -701,7 +734,7 @@ bool CBattlefield::CanCleanup(bool cleanup)
     return m_Cleanup || m_EnteredPlayers.empty();
 }
 
-bool CBattlefield::Cleanup(time_point time, bool force)
+bool CBattlefield::Cleanup(timer::time_point time, bool force)
 {
     // Wait until
     if (!force && !m_EnteredPlayers.empty() && m_cleanupTime > time)
@@ -787,7 +820,7 @@ bool CBattlefield::Cleanup(time_point time, bool force)
         auto* PChar = GetZone()->GetCharByID(id);
         if (PChar)
         {
-            PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+            PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
             m_Zone->updateCharLevelRestriction(PChar);
 
             // Remove allies from player's spawn list
@@ -802,27 +835,32 @@ bool CBattlefield::Cleanup(time_point time, bool force)
 
             if (PChar->PPet)
             {
-                PChar->PPet->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+                PChar->PPet->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
             }
         }
     }
 
     if (m_Attacked && m_Status == BATTLEFIELD_STATUS_WON)
     {
-        const char* query        = "SELECT fastestTime FROM bcnm_records WHERE bcnmId = %u AND zoneId = %u";
-        auto        ret          = _sql->Query(query, this->GetID(), this->GetZoneID());
-        bool        updateRecord = true;
-        if (ret != SQL_ERROR && _sql->NextRow() == SQL_SUCCESS)
+        bool updateRecord = true;
+
+        const auto rset = db::preparedStmt("SELECT fastestTime FROM bcnm_records WHERE bcnmId = ? AND zoneId = ?", this->GetID(), this->GetZoneID());
+        if (rset && rset->rowsCount() && rset->next())
         {
-            updateRecord = _sql->GetUIntData(0) > std::chrono::duration_cast<std::chrono::seconds>(m_Record.time).count();
+            const auto fastestTime = rset->get<uint32>("fastestTime");
+            updateRecord           = fastestTime > timer::count_seconds(m_Record.time);
         }
 
         if (updateRecord)
         {
-            query          = "UPDATE bcnm_records SET fastestName = '%s', fastestTime = %u, fastestPartySize = %u WHERE bcnmId = %u AND zoneid = %u";
-            auto timeThing = std::chrono::duration_cast<std::chrono::seconds>(m_Record.time).count();
+            const uint32 timeThing = timer::count_seconds(m_Record.time);
 
-            _sql->Query(query, m_Record.name.c_str(), timeThing, m_Record.partySize, this->GetID(), GetZoneID());
+            db::preparedStmt("UPDATE bcnm_records SET fastestName = ?, fastestTime = ?, fastestPartySize = ? WHERE bcnmId = ? AND zoneid = ?",
+                             m_Record.name,
+                             timeThing,
+                             static_cast<uint32>(m_Record.partySize),
+                             this->GetID(),
+                             GetZoneID());
         }
     }
 
@@ -831,19 +869,19 @@ bool CBattlefield::Cleanup(time_point time, bool force)
 
 bool CBattlefield::CheckInProgress()
 {
-    // clang-format off
-    ForEachEnemy([&](CMobEntity* PMob)
-    {
-        if (!PMob->PEnmityContainer->GetEnmityList()->empty())
-        {
-            if (m_Status == BATTLEFIELD_STATUS_OPEN)
-            {
-                SetStatus(BATTLEFIELD_STATUS_LOCKED);
-            }
-            m_Attacked = true;
-        }
-    });
-    // clang-format on
+    ForEachEnemy([&](const CMobEntity* PMob)
+                 {
+                     // Any entry in enmity list or currently chasing someone
+                     if (!PMob->PEnmityContainer->GetEnmityList()->empty() || PMob->GetBattleTargetID())
+                     {
+                         if (m_Status == BATTLEFIELD_STATUS_OPEN)
+                         {
+                             SetStatus(BATTLEFIELD_STATUS_LOCKED);
+                         }
+
+                         m_Attacked = true;
+                     }
+                 });
 
     // mobs might have 0 enmity but we wont allow anymore players to enter
     return m_Status != BATTLEFIELD_STATUS_OPEN;
@@ -972,7 +1010,7 @@ void CBattlefield::handleDeath(CBaseEntity* PEntity)
 
 void CBattlefield::setPlayerEntered(CCharEntity* PChar, bool entered)
 {
-    CStatusEffect* effect = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_BATTLEFIELD);
+    CStatusEffect* effect = PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::Battlefield);
 
     if (effect == nullptr)
     {
@@ -985,15 +1023,15 @@ void CBattlefield::setPlayerEntered(CCharEntity* PChar, bool entered)
 
 bool CBattlefield::hasPlayerEntered(CCharEntity* PChar)
 {
-    if (!PChar->StatusEffectContainer->HasStatusEffect(EFFECT_BATTLEFIELD))
+    if (!PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Battlefield))
     {
         return false;
     }
 
-    return PChar->StatusEffectContainer->GetStatusEffect(EFFECT_BATTLEFIELD)->GetTier() == 1;
+    return PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::Battlefield)->GetTier() == 1;
 }
 
 uint16 CBattlefield::getBattlefieldArea(CCharEntity* PChar)
 {
-    return PChar->StatusEffectContainer->GetStatusEffect(EFFECT_BATTLEFIELD)->GetSubPower();
+    return PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::Battlefield)->GetSubPower();
 }

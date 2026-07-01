@@ -25,8 +25,8 @@ local luopanModels =
 
 local indiVisualEffect =
 {
-    FIRE    = { ALLIES = 0, ENEMIES = 8  },
-    ICE     = { ALLIES = 1, ENEMIES = 9  },
+    FIRE    = { ALLIES = 0, ENEMIES =  8 },
+    ICE     = { ALLIES = 1, ENEMIES =  9 },
     WIND    = { ALLIES = 2, ENEMIES = 10 },
     EARTH   = { ALLIES = 3, ENEMIES = 11 },
     THUNDER = { ALLIES = 4, ENEMIES = 12 },
@@ -37,104 +37,106 @@ local indiVisualEffect =
 
 local geoData =
 {
-    [xi.magic.spell.GEO_REGEN]      = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_REGEN,               targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_POISON]     = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_POISON,              targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_REFRESH]    = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_REFRESH,             targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_HASTE]      = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_HASTE,               targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_STR]        = { luopanModel = luopanModels.FIRE,    effect = xi.effect.GEO_STR_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_DEX]        = { luopanModel = luopanModels.THUNDER, effect = xi.effect.GEO_DEX_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_VIT]        = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_VIT_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_AGI]        = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_AGI_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_INT]        = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_INT_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_MND]        = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_MND_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_CHR]        = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_CHR_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_FURY]       = { luopanModel = luopanModels.FIRE,    effect = xi.effect.GEO_ATTACK_BOOST,        targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_BARRIER]    = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_DEFENSE_BOOST,       targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_ACUMEN]     = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_MAGIC_ATK_BOOST,     targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_FEND]       = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_MAGIC_DEF_BOOST,     targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_PRECISION]  = { luopanModel = luopanModels.THUNDER, effect = xi.effect.GEO_ACCURACY_BOOST,      targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_VOIDANCE]   = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_EVASION_BOOST,       targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_FOCUS]      = { luopanModel = luopanModels.DARK,    effect = xi.effect.GEO_MAGIC_ACC_BOOST,     targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_REGEN     ] = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_REGEN,               targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_POISON    ] = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_POISON,              targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_REFRESH   ] = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_REFRESH,             targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_HASTE     ] = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_HASTE,               targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_STR       ] = { luopanModel = luopanModels.FIRE,    effect = xi.effect.GEO_STR_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_DEX       ] = { luopanModel = luopanModels.THUNDER, effect = xi.effect.GEO_DEX_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_VIT       ] = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_VIT_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_AGI       ] = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_AGI_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_INT       ] = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_INT_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_MND       ] = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_MND_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_CHR       ] = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_CHR_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_FURY      ] = { luopanModel = luopanModels.FIRE,    effect = xi.effect.GEO_ATTACK_BOOST,        targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_BARRIER   ] = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_DEFENSE_BOOST,       targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_ACUMEN    ] = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_MAGIC_ATK_BOOST,     targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_FEND      ] = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_MAGIC_DEF_BOOST,     targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_PRECISION ] = { luopanModel = luopanModels.THUNDER, effect = xi.effect.GEO_ACCURACY_BOOST,      targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_VOIDANCE  ] = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_EVASION_BOOST,       targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.GEO_FOCUS     ] = { luopanModel = luopanModels.DARK,    effect = xi.effect.GEO_MAGIC_ACC_BOOST,     targetType = xi.auraTarget.ALLIES  },
     [xi.magic.spell.GEO_ATTUNEMENT] = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_MAGIC_EVASION_BOOST, targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.GEO_WILT]       = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_ATTACK_DOWN,         targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_FRAILTY]    = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_DEFENSE_DOWN,        targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_FADE]       = { luopanModel = luopanModels.FIRE,    effect = xi.effect.GEO_MAGIC_ATK_DOWN,      targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_MALAISE]    = { luopanModel = luopanModels.THUNDER, effect = xi.effect.GEO_MAGIC_DEF_DOWN,      targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_SLIP]       = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_ACCURACY_DOWN,       targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_TORPOR]     = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_EVASION_DOWN,        targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_VEX]        = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_MAGIC_ACC_DOWN,      targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_LANGUOR]    = { luopanModel = luopanModels.DARK,    effect = xi.effect.GEO_MAGIC_EVASION_DOWN,  targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_SLOW]       = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_SLOW,                targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_PARALYSIS]  = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_PARALYSIS,           targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.GEO_GRAVITY]    = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_WEIGHT,              targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_WILT      ] = { luopanModel = luopanModels.WATER,   effect = xi.effect.GEO_ATTACK_DOWN,         targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_FRAILTY   ] = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_DEFENSE_DOWN,        targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_FADE      ] = { luopanModel = luopanModels.FIRE,    effect = xi.effect.GEO_MAGIC_ATK_DOWN,      targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_MALAISE   ] = { luopanModel = luopanModels.THUNDER, effect = xi.effect.GEO_MAGIC_DEF_DOWN,      targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_SLIP      ] = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_ACCURACY_DOWN,       targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_TORPOR    ] = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_EVASION_DOWN,        targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_VEX       ] = { luopanModel = luopanModels.LIGHT,   effect = xi.effect.GEO_MAGIC_ACC_DOWN,      targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_LANGUOR   ] = { luopanModel = luopanModels.DARK,    effect = xi.effect.GEO_MAGIC_EVASION_DOWN,  targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_SLOW      ] = { luopanModel = luopanModels.EARTH,   effect = xi.effect.GEO_SLOW,                targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_PARALYSIS ] = { luopanModel = luopanModels.ICE,     effect = xi.effect.GEO_PARALYSIS,           targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.GEO_GRAVITY   ] = { luopanModel = luopanModels.WIND,    effect = xi.effect.GEO_WEIGHT,              targetType = xi.auraTarget.ENEMIES },
 }
 
 local indiData =
 {
-    [xi.magic.spell.INDI_REGEN]      = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_REGEN,               targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_POISON]     = { visualEffect = indiVisualEffect.WATER.ENEMIES,   effect = xi.effect.GEO_POISON,              targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_REFRESH]    = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_REFRESH,             targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_HASTE]      = { visualEffect = indiVisualEffect.WIND.ALLIES,     effect = xi.effect.GEO_HASTE,               targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_STR]        = { visualEffect = indiVisualEffect.FIRE.ALLIES,     effect = xi.effect.GEO_STR_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_DEX]        = { visualEffect = indiVisualEffect.THUNDER.ALLIES,  effect = xi.effect.GEO_DEX_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_VIT]        = { visualEffect = indiVisualEffect.EARTH.ALLIES,    effect = xi.effect.GEO_VIT_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_AGI]        = { visualEffect = indiVisualEffect.WIND.ALLIES,     effect = xi.effect.GEO_AGI_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_INT]        = { visualEffect = indiVisualEffect.ICE.ALLIES,      effect = xi.effect.GEO_INT_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_MND]        = { visualEffect = indiVisualEffect.WATER.ALLIES,    effect = xi.effect.GEO_MND_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_CHR]        = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_CHR_BOOST,           targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_FURY]       = { visualEffect = indiVisualEffect.FIRE.ALLIES,     effect = xi.effect.GEO_ATTACK_BOOST,        targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_BARRIER]    = { visualEffect = indiVisualEffect.EARTH.ALLIES,    effect = xi.effect.GEO_DEFENSE_BOOST,       targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_ACUMEN]     = { visualEffect = indiVisualEffect.ICE.ALLIES,      effect = xi.effect.GEO_MAGIC_ATK_BOOST,     targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_FEND]       = { visualEffect = indiVisualEffect.WATER.ALLIES,    effect = xi.effect.GEO_MAGIC_DEF_BOOST,     targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_PRECISION]  = { visualEffect = indiVisualEffect.THUNDER.ALLIES,  effect = xi.effect.GEO_ACCURACY_BOOST,      targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_VOIDANCE]   = { visualEffect = indiVisualEffect.WIND.ALLIES,     effect = xi.effect.GEO_EVASION_BOOST,       targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_FOCUS]      = { visualEffect = indiVisualEffect.DARK.ALLIES,     effect = xi.effect.GEO_MAGIC_ACC_BOOST,     targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_REGEN     ] = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_REGEN,               targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_POISON    ] = { visualEffect = indiVisualEffect.WATER.ENEMIES,   effect = xi.effect.GEO_POISON,              targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_REFRESH   ] = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_REFRESH,             targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_HASTE     ] = { visualEffect = indiVisualEffect.WIND.ALLIES,     effect = xi.effect.GEO_HASTE,               targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_STR       ] = { visualEffect = indiVisualEffect.FIRE.ALLIES,     effect = xi.effect.GEO_STR_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_DEX       ] = { visualEffect = indiVisualEffect.THUNDER.ALLIES,  effect = xi.effect.GEO_DEX_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_VIT       ] = { visualEffect = indiVisualEffect.EARTH.ALLIES,    effect = xi.effect.GEO_VIT_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_AGI       ] = { visualEffect = indiVisualEffect.WIND.ALLIES,     effect = xi.effect.GEO_AGI_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_INT       ] = { visualEffect = indiVisualEffect.ICE.ALLIES,      effect = xi.effect.GEO_INT_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_MND       ] = { visualEffect = indiVisualEffect.WATER.ALLIES,    effect = xi.effect.GEO_MND_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_CHR       ] = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_CHR_BOOST,           targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_FURY      ] = { visualEffect = indiVisualEffect.FIRE.ALLIES,     effect = xi.effect.GEO_ATTACK_BOOST,        targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_BARRIER   ] = { visualEffect = indiVisualEffect.EARTH.ALLIES,    effect = xi.effect.GEO_DEFENSE_BOOST,       targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_ACUMEN    ] = { visualEffect = indiVisualEffect.ICE.ALLIES,      effect = xi.effect.GEO_MAGIC_ATK_BOOST,     targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_FEND      ] = { visualEffect = indiVisualEffect.WATER.ALLIES,    effect = xi.effect.GEO_MAGIC_DEF_BOOST,     targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_PRECISION ] = { visualEffect = indiVisualEffect.THUNDER.ALLIES,  effect = xi.effect.GEO_ACCURACY_BOOST,      targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_VOIDANCE  ] = { visualEffect = indiVisualEffect.WIND.ALLIES,     effect = xi.effect.GEO_EVASION_BOOST,       targetType = xi.auraTarget.ALLIES  },
+    [xi.magic.spell.INDI_FOCUS     ] = { visualEffect = indiVisualEffect.DARK.ALLIES,     effect = xi.effect.GEO_MAGIC_ACC_BOOST,     targetType = xi.auraTarget.ALLIES  },
     [xi.magic.spell.INDI_ATTUNEMENT] = { visualEffect = indiVisualEffect.LIGHT.ALLIES,    effect = xi.effect.GEO_MAGIC_EVASION_BOOST, targetType = xi.auraTarget.ALLIES  },
-    [xi.magic.spell.INDI_WILT]       = { visualEffect = indiVisualEffect.WATER.ENEMIES,   effect = xi.effect.GEO_ATTACK_DOWN,         targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_FRAILTY]    = { visualEffect = indiVisualEffect.WIND.ENEMIES,    effect = xi.effect.GEO_DEFENSE_DOWN,        targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_FADE]       = { visualEffect = indiVisualEffect.FIRE.ENEMIES,    effect = xi.effect.GEO_MAGIC_ATK_DOWN,      targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_MALAISE]    = { visualEffect = indiVisualEffect.THUNDER.ENEMIES, effect = xi.effect.GEO_MAGIC_DEF_DOWN,      targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_SLIP]       = { visualEffect = indiVisualEffect.EARTH.ENEMIES,   effect = xi.effect.GEO_ACCURACY_DOWN,       targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_TORPOR]     = { visualEffect = indiVisualEffect.ICE.ENEMIES,     effect = xi.effect.GEO_EVASION_DOWN,        targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_VEX]        = { visualEffect = indiVisualEffect.LIGHT.ENEMIES,   effect = xi.effect.GEO_MAGIC_ACC_DOWN,      targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_LANGUOR]    = { visualEffect = indiVisualEffect.DARK.ENEMIES,    effect = xi.effect.GEO_MAGIC_EVASION_DOWN,  targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_SLOW]       = { visualEffect = indiVisualEffect.EARTH.ENEMIES,   effect = xi.effect.GEO_SLOW,                targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_PARALYSIS]  = { visualEffect = indiVisualEffect.ICE.ENEMIES,     effect = xi.effect.GEO_PARALYSIS,           targetType = xi.auraTarget.ENEMIES },
-    [xi.magic.spell.INDI_GRAVITY]    = { visualEffect = indiVisualEffect.WIND.ENEMIES,    effect = xi.effect.GEO_WEIGHT,              targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_WILT      ] = { visualEffect = indiVisualEffect.WATER.ENEMIES,   effect = xi.effect.GEO_ATTACK_DOWN,         targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_FRAILTY   ] = { visualEffect = indiVisualEffect.WIND.ENEMIES,    effect = xi.effect.GEO_DEFENSE_DOWN,        targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_FADE      ] = { visualEffect = indiVisualEffect.FIRE.ENEMIES,    effect = xi.effect.GEO_MAGIC_ATK_DOWN,      targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_MALAISE   ] = { visualEffect = indiVisualEffect.THUNDER.ENEMIES, effect = xi.effect.GEO_MAGIC_DEF_DOWN,      targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_SLIP      ] = { visualEffect = indiVisualEffect.EARTH.ENEMIES,   effect = xi.effect.GEO_ACCURACY_DOWN,       targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_TORPOR    ] = { visualEffect = indiVisualEffect.ICE.ENEMIES,     effect = xi.effect.GEO_EVASION_DOWN,        targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_VEX       ] = { visualEffect = indiVisualEffect.LIGHT.ENEMIES,   effect = xi.effect.GEO_MAGIC_ACC_DOWN,      targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_LANGUOR   ] = { visualEffect = indiVisualEffect.DARK.ENEMIES,    effect = xi.effect.GEO_MAGIC_EVASION_DOWN,  targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_SLOW      ] = { visualEffect = indiVisualEffect.EARTH.ENEMIES,   effect = xi.effect.GEO_SLOW,                targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_PARALYSIS ] = { visualEffect = indiVisualEffect.ICE.ENEMIES,     effect = xi.effect.GEO_PARALYSIS,           targetType = xi.auraTarget.ENEMIES },
+    [xi.magic.spell.INDI_GRAVITY   ] = { visualEffect = indiVisualEffect.WIND.ENEMIES,    effect = xi.effect.GEO_WEIGHT,              targetType = xi.auraTarget.ENEMIES },
 }
 
+-- "minPotency" is potency as zero combined skill
+-- "maxSkill" is the combined skill where you reach maxPotency
 local potencyData =
 {
-    [xi.effect.GEO_REGEN]               = { divisor =  20.00, minPotency = 1.0, maxPotency = 30.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_POISON]              = { divisor =  20.00, minPotency = 1.0, maxPotency = 30.0, geoModMultiplier = 3.0 },
-    [xi.effect.GEO_REFRESH]             = { divisor = 150.00, minPotency = 1.0, maxPotency =  6.0, geoModMultiplier = 1.0 },
-    [xi.effect.GEO_STR_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_DEX_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_VIT_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_AGI_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_INT_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_MND_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_CHR_BOOST]           = { divisor =  36.00, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
-    [xi.effect.GEO_ATTACK_BOOST]        = { divisor =  25.93, minPotency = 4.6, maxPotency = 34.7, geoModMultiplier = 2.7 },
-    [xi.effect.GEO_DEFENSE_BOOST]       = { divisor =  22.61, minPotency = 9.7, maxPotency = 39.8, geoModMultiplier = 4.6 },
-    [xi.effect.GEO_MAGIC_ATK_BOOST]     = { divisor =  60.00, minPotency = 3.0, maxPotency = 15.0, geoModMultiplier = 3.0 },
-    [xi.effect.GEO_MAGIC_DEF_BOOST]     = { divisor =  45.00, minPotency = 5.0, maxPotency = 20.0, geoModMultiplier = 4.0 },
-    [xi.effect.GEO_ACCURACY_BOOST]      = { divisor =  18.00, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
-    [xi.effect.GEO_EVASION_BOOST]       = { divisor =  13.84, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 5.0 },
-    [xi.effect.GEO_MAGIC_ACC_BOOST]     = { divisor =  18.00, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
-    [xi.effect.GEO_MAGIC_EVASION_BOOST] = { divisor =  13.84, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 6.0 },
-    [xi.effect.GEO_ATTACK_DOWN]         = { divisor =  36.00, minPotency = 4.6, maxPotency = 25.0, geoModMultiplier = 4.6 },
-    [xi.effect.GEO_DEFENSE_DOWN]        = { divisor =  60.81, minPotency = 2.7, maxPotency = 14.8, geoModMultiplier = 2.7 },
-    [xi.effect.GEO_MAGIC_ATK_DOWN]      = { divisor =  45.00, minPotency = 5.0, maxPotency = 20.0, geoModMultiplier = 4.0 },
-    [xi.effect.GEO_MAGIC_DEF_DOWN]      = { divisor =  60.00, minPotency = 3.0, maxPotency = 15.0, geoModMultiplier = 3.0 },
-    [xi.effect.GEO_ACCURACY_DOWN]       = { divisor =  13.84, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 6.0 },
-    [xi.effect.GEO_EVASION_DOWN]        = { divisor =  18.00, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
-    [xi.effect.GEO_MAGIC_ACC_DOWN]      = { divisor =  13.84, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 6.0 },
-    [xi.effect.GEO_MAGIC_EVASION_DOWN]  = { divisor =  18.00, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
-    [xi.effect.GEO_SLOW]                = { divisor =  60.4,  minPotency = 0.9, maxPotency = 14.9, geoModMultiplier = 0.5 },
-    [xi.effect.GEO_PARALYSIS]           = { divisor =  60.00, minPotency = 1.0, maxPotency = 15.0, geoModMultiplier = 1.0 },
-    [xi.effect.GEO_WEIGHT]              = { divisor =  45.22, minPotency = 3.9, maxPotency = 19.9, geoModMultiplier = 1.1 },
-    [xi.effect.GEO_HASTE]               = { divisor =  30.1,  minPotency = 2.4, maxPotency = 29.9, geoModMultiplier = 1.1 },
+    [xi.effect.GEO_REGEN              ] = { maxSkill = 600, minPotency = 1.0, maxPotency = 30.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_POISON             ] = { maxSkill = 600, minPotency = 1.0, maxPotency = 30.0, geoModMultiplier = 3.0 },
+    [xi.effect.GEO_REFRESH            ] = { maxSkill = 900, minPotency = 1.0, maxPotency =  6.0, geoModMultiplier = 1.0 },
+    [xi.effect.GEO_STR_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_DEX_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_VIT_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_AGI_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_INT_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_MND_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_CHR_BOOST          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 25.0, geoModMultiplier = 2.0 },
+    [xi.effect.GEO_ATTACK_BOOST       ] = { maxSkill = 900, minPotency = 4.6, maxPotency = 34.7, geoModMultiplier = 2.7 },
+    [xi.effect.GEO_DEFENSE_BOOST      ] = { maxSkill = 900, minPotency = 9.7, maxPotency = 39.8, geoModMultiplier = 4.6 },
+    [xi.effect.GEO_MAGIC_ATK_BOOST    ] = { maxSkill = 900, minPotency = 3.0, maxPotency = 15.0, geoModMultiplier = 3.0 },
+    [xi.effect.GEO_MAGIC_DEF_BOOST    ] = { maxSkill = 900, minPotency = 5.0, maxPotency = 20.0, geoModMultiplier = 4.0 },
+    [xi.effect.GEO_ACCURACY_BOOST     ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
+    [xi.effect.GEO_EVASION_BOOST      ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 5.0 },
+    [xi.effect.GEO_MAGIC_ACC_BOOST    ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
+    [xi.effect.GEO_MAGIC_EVASION_BOOST] = { maxSkill = 900, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 6.0 },
+    [xi.effect.GEO_ATTACK_DOWN        ] = { maxSkill = 900, minPotency = 4.6, maxPotency = 25.0, geoModMultiplier = 4.6 },
+    [xi.effect.GEO_DEFENSE_DOWN       ] = { maxSkill = 900, minPotency = 2.7, maxPotency = 14.8, geoModMultiplier = 2.7 },
+    [xi.effect.GEO_MAGIC_ATK_DOWN     ] = { maxSkill = 900, minPotency = 5.0, maxPotency = 20.0, geoModMultiplier = 4.0 },
+    [xi.effect.GEO_MAGIC_DEF_DOWN     ] = { maxSkill = 900, minPotency = 3.0, maxPotency = 15.0, geoModMultiplier = 3.0 },
+    [xi.effect.GEO_ACCURACY_DOWN      ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 6.0 },
+    [xi.effect.GEO_EVASION_DOWN       ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
+    [xi.effect.GEO_MAGIC_ACC_DOWN     ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 65.0, geoModMultiplier = 6.0 },
+    [xi.effect.GEO_MAGIC_EVASION_DOWN ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 50.0, geoModMultiplier = 5.0 },
+    [xi.effect.GEO_SLOW               ] = { maxSkill = 900, minPotency = 0.9, maxPotency = 14.9, geoModMultiplier = 0.5 },
+    [xi.effect.GEO_PARALYSIS          ] = { maxSkill = 900, minPotency = 1.0, maxPotency = 15.0, geoModMultiplier = 1.0 },
+    [xi.effect.GEO_WEIGHT             ] = { maxSkill = 900, minPotency = 3.9, maxPotency = 19.9, geoModMultiplier = 1.1 },
+    [xi.effect.GEO_HASTE              ] = { maxSkill = 900, minPotency = 2.4, maxPotency = 29.9, geoModMultiplier = 1.1 },
 }
 
 local function getLuopan(player)
@@ -168,6 +170,25 @@ xi.job_utils.geomancer.geoOnAbilityCheck = function(player, target, ability)
     return xi.msg.basic.REQUIRE_LUOPAN, 0
 end
 
+xi.job_utils.geomancer.geoOnConcentricPulseAbilityCheck = function(player, target, ability)
+    local pet = player:getPet()
+    if not hasLuopan(player) or not pet then
+        return xi.msg.basic.REQUIRE_LUOPAN, 0
+    end
+
+    -- player out of range of luopan
+    if player:checkDistance(pet) > ability:getRange() + player:getHitboxSize() + pet:getHitboxSize() then
+        return xi.msg.basic.TARG_OUT_OF_RANGE_2, 0
+    end
+
+    -- target out of range of luopan
+    if target:checkDistance(pet) > ability:getRange() + target:getHitboxSize() + pet:getHitboxSize() then
+        return xi.msg.basic.TARG_OUT_OF_RANGE_2, pet:getTargID()
+    end
+
+    return 0, 0
+end
+
 xi.job_utils.geomancer.geoOnLifeCycleAbilityCheck = function(player, target, ability)
     if not hasLuopan(player) then
         return xi.msg.basic.REQUIRE_LUOPAN, 0
@@ -183,7 +204,6 @@ end
 xi.job_utils.geomancer.geoOnEclipticAttritionCheck = function(player, target, ability)
     local luopan = getLuopan(player)
 
-    -- TODO: this never fires if you dont have a bubble up and says "Unable to attack that target." Core issue?
     if not luopan then
         return xi.msg.basic.REQUIRE_LUOPAN, 0
     end
@@ -191,6 +211,14 @@ xi.job_utils.geomancer.geoOnEclipticAttritionCheck = function(player, target, ab
     if luopan:getLocalVar('eclipticAttrition') ~= 0 then
         -- This message is guessed
         return xi.msg.basic.UNABLE_TO_USE_JA, 0
+    end
+
+    return 0, 0
+end
+
+xi.job_utils.geomancer.geoOnTheurgicFocusCheck = function(player, target, ability)
+    if player:hasStatusEffect(xi.effect.THEURGIC_FOCUS) then
+        return xi.msg.basic.EFFECT_ALREADY_ACTIVE, 0
     end
 
     return 0, 0
@@ -207,8 +235,8 @@ local function getEffectPotency(player, effect)
     local geomancyMod   = 0
 
     if player:getObjType() ~= xi.objType.PC then
-        geoSkill      = player:getMod(xi.mod.GEOMANCY_SKILL)
-        geomancyMod   = player:getMod(xi.mod.GEOMANCY_BONUS)
+        geoSkill    = player:getMod(xi.mod.GEOMANCY_SKILL)
+        geomancyMod = player:getMod(xi.mod.GEOMANCY_BONUS)
     else
         geomancyMod = player:getMaxGearMod(xi.mod.GEOMANCY_BONUS)
     end
@@ -221,14 +249,17 @@ local function getEffectPotency(player, effect)
     end
 
     local combinedSkillLevel = utils.clamp(handbellSkill + geoSkill, 0, 900)
-    local divisor            = potencyData[effect].divisor
+    local maxSkill           = potencyData[effect].maxSkill
     local minPotency         = potencyData[effect].minPotency
     local maxPotency         = potencyData[effect].maxPotency
-    local potency            = utils.clamp(combinedSkillLevel / divisor, minPotency, maxPotency)
+    -- TODO find the real scaling formula?
+    -- linear regression to find divisor based on minPotency at 0 skill and maxPotency at "maxSkill"
+    local divisor            = maxSkill / (maxPotency - minPotency)
+    local potency            = utils.clamp(minPotency + combinedSkillLevel / divisor, minPotency, maxPotency)
 
     if geomancyMod > 0 and not player:hasStatusEffect(xi.effect.ENTRUST) then
         -- Geomancy bonus is a mod value * the multiplier then added to the final potency of the effect
-        potency = potency + (geomancyMod * potencyData[effect].geoModMultiplier)
+        potency = potency + geomancyMod * potencyData[effect].geoModMultiplier
     end
 
     -- Boost potency calculations for Haste/Slow into the no-longer-human-readable-format
@@ -259,27 +290,34 @@ end
 -----------------------------------
 xi.job_utils.geomancer.bolster = function(player, target, ability)
     local bonusTime = player:getMod(xi.mod.BOLSTER_EFFECT)
-    player:addStatusEffect(xi.effect.BOLSTER, 0, 3, 240 + bonusTime)
+    player:addStatusEffect(xi.effect.BOLSTER, { duration = 240 + bonusTime, origin = player, tick = 3 })
+
+    return xi.effect.BOLSTER
 end
 
 xi.job_utils.geomancer.fullCircle = function(player, target, ability)
-    local hppRemaining = target:getHPP()
+    local luopan = getLuopan(player)
+    if not luopan then
+        return
+    end
+
+    local hppRemaining = luopan:getHPP()
     local mpCost       = player:getLocalVar('MP_COST')
     local fcMerit      = player:getMerit(xi.merit.FULL_CIRCLE_EFFECT)
     local crMerit      = player:getMerit(xi.merit.CURATIVE_RECANTATION)
     local fcMod        = player:getMod(xi.mod.FULL_CIRCLE)
     local crMod        = player:getMod(xi.mod.CURATIVE_RECANTATION)
-    local mpMultiplier = 0.5 + (fcMerit / 10) + (fcMod / 10)
-    local hpMultiplier = 0.5 + (0.7 * crMerit) + (crMod / 10)
+    local mpMultiplier = 0.5 + fcMerit / 10 + fcMod / 10
+    local hpMultiplier = 0.5 + 0.7 * crMerit + crMod / 10
     local mpReturned   = 0
     local hpReturned   = 0
 
     -- calculate final mp value
-    mpReturned = math.floor(mpMultiplier * mpCost * (hppRemaining / 100))
+    mpReturned = math.floor(mpMultiplier * mpCost * hppRemaining / 100)
 
     if crMerit > 0 then
         -- calculate final hp value
-        hpReturned = math.floor(hpMultiplier * mpCost * (hppRemaining / 100))
+        hpReturned = math.floor(hpMultiplier * mpCost * hppRemaining / 100)
         player:restoreHP(hpReturned)
     end
 
@@ -287,40 +325,68 @@ xi.job_utils.geomancer.fullCircle = function(player, target, ability)
     player:despawnPet()
 end
 
-xi.job_utils.geomancer.lastingEmanation = function(player, target, ability)
-    local hpDrain = target:getMod(xi.mod.REGEN_DOWN)
-    target:setMod(xi.mod.REGEN_DOWN, hpDrain - math.floor(target:getMainLvl() / 14))
+xi.job_utils.geomancer.lastingEmanation = function(player, target, ability, action)
+    local luopan = getLuopan(player)
+
+    if not luopan then
+        return
+    end
+
+    local hpDrain = luopan:getMod(xi.mod.REGEN_DOWN)
+    luopan:setMod(xi.mod.REGEN_DOWN, hpDrain - math.floor(luopan:getMainLvl() / 14))
+    -- Self cast ability but targets Luopan
+    action:ID(player:getID(), luopan:getID())
 end
 
 -- TODO: allegedly Blaze of Glory is additive to this, but we aren't keeping track of that potency, so BoG + Ecliptic Attrition is stronger than it should be.
 --       That is probably fixable with some localvars on the bubble...?
-xi.job_utils.geomancer.eclipticAttrition = function(player, target, ability)
-    if target:getLocalVar('eclipticAttrition') ~= 0 then
+xi.job_utils.geomancer.eclipticAttrition = function(player, target, ability, action)
+    local luopan = getLuopan(player)
+    if not luopan then
         return
     end
 
-    local hpDrain = target:getMod(xi.mod.REGEN_DOWN)
-    target:setMod(xi.mod.REGEN_DOWN, hpDrain + math.floor(target:getMainLvl() / 16))
+    -- Self cast ability but targets Luopan
+    action:ID(player:getID(), luopan:getID())
+
+    if luopan:getLocalVar('eclipticAttrition') ~= 0 then
+        return
+    end
+
+    local hpDrain = luopan:getMod(xi.mod.REGEN_DOWN)
+    luopan:setMod(xi.mod.REGEN_DOWN, hpDrain + math.floor(luopan:getMainLvl() / 16))
 
     if player:hasStatusEffect(xi.effect.BOLSTER) then
         return
     end
 
-    local effect = target:getStatusEffect(xi.effect.COLURE_ACTIVE)
-    if effect then
-        local finalPotency = math.floor(1.25 * effect:getSubPower())
-
-        -- This floors https://www.bg-wiki.com/ffxi/Ecliptic_Attrition
-        effect:setSubPower(finalPotency)
-        target:setLocalVar('eclipticAttrition', 1)
+    local effect = luopan:getStatusEffect(xi.effect.COLURE_ACTIVE)
+    if not effect then
+        return
     end
+
+    local finalPotency = math.floor(1.25 * effect:getSubPower())
+
+    -- This floors https://www.bg-wiki.com/ffxi/Ecliptic_Attrition
+    effect:setSubPower(finalPotency)
+    luopan:setLocalVar('eclipticAttrition', 1)
 end
 
 xi.job_utils.geomancer.collimatedFervor = function(player, target, ability)
-    target:addStatusEffect(xi.effect.COLLIMATED_FERVOR, 0, 0, 60)
+    target:addStatusEffect(xi.effect.COLLIMATED_FERVOR, { duration = 60, origin = player })
+
+    return xi.effect.COLLIMATED_FERVOR
 end
 
-xi.job_utils.geomancer.lifeCycle = function(player, target, ability)
+xi.job_utils.geomancer.lifeCycle = function(player, target, ability, action)
+    local luopan = getLuopan(player)
+    if not luopan then
+        return
+    end
+
+    -- Self cast ability but targets Luopan
+    action:ID(player:getID(), luopan:getID())
+
     local hpAmount   = math.floor(0.25 * player:getHP())
     local hpTransfer = hpAmount
 
@@ -328,25 +394,38 @@ xi.job_utils.geomancer.lifeCycle = function(player, target, ability)
         hpTransfer = hpAmount * player:getMod(xi.mod.LIFE_CYCLE_EFFECT) / 10
     end
 
-    target:restoreHP(hpTransfer)
+    luopan:restoreHP(hpTransfer)
     player:delHP(hpAmount)
     return hpTransfer
 end
 
 xi.job_utils.geomancer.blazeOfGlory = function(player, target, ability)
-    player:addStatusEffect(xi.effect.BLAZE_OF_GLORY, 0, 3, 60)
+    player:addStatusEffect(xi.effect.BLAZE_OF_GLORY, { duration = 60, origin = player, tick = 3 })
+
+    return xi.effect.BLAZE_OF_GLORY
 end
 
-xi.job_utils.geomancer.dematerialize = function(player, target, ability)
-    target:addStatusEffect(xi.effect.DEMATERIALIZE, 0, 3, 60)
+xi.job_utils.geomancer.dematerialize = function(player, target, ability, action)
+    local luopan = getLuopan(player)
+    if luopan then
+        luopan:addStatusEffect(xi.effect.DEMATERIALIZE, { duration = 60, origin = player, tick = 3 })
+        -- Self-cast ability but reports effect on Luopan
+        action:ID(player:getID(), luopan:getID())
+    end
+
     return xi.effect.DEMATERIALIZE
 end
 
 xi.job_utils.geomancer.theurgicFocus = function(player, target, ability)
+    player:addStatusEffect(xi.effect.THEURGIC_FOCUS, { power = 1, duration = 60, origin = player })
+
+    return xi.effect.THEURGIC_FOCUS
 end
 
 xi.job_utils.geomancer.widenedCompass = function(player, target, ability)
-    player:addStatusEffect(xi.effect.WIDENED_COMPASS, 0, 3, 60)
+    player:addStatusEffect(xi.effect.WIDENED_COMPASS, { duration = 60, origin = player, tick = 3 })
+
+    return xi.effect.WIDENED_COMPASS
 end
 
 -----------------------------------
@@ -387,7 +466,7 @@ end
 --             xi.auraTarget.ALLIES or xi.auraTarget.ENEMIES
 -----------------------------------
 xi.job_utils.geomancer.addAura = function(target, duration, tickEffect, tickPower, targetType)
-    target:addStatusEffectEx(xi.effect.COLURE_ACTIVE, xi.effect.COLURE_ACTIVE, 0, 3, duration, tickEffect, tickPower, targetType, xi.effectFlag.AURA)
+    target:addStatusEffect(xi.effect.COLURE_ACTIVE, { duration = duration, origin = target, tick = 3, subType = tickEffect, subPower = tickPower, tier = targetType, flag = xi.effectFlag.AURA })
 end
 
 -----------------------------------
@@ -399,7 +478,7 @@ xi.job_utils.geomancer.doIndiSpell = function(caster, target, spell)
     local potency      = getEffectPotency(caster, effect)
     local targetType   = indiData[spellID].targetType
     local visualEffect = indiData[spellID].visualEffect
-    local duration = 180 + caster:getMod(xi.mod.INDI_DURATION)
+    local duration     = 180 + caster:getMod(xi.mod.INDI_DURATION)
 
     -- set a local var to adjust potency values after an ability has worn off
     target:setLocalVar('INDI_POTENCY', potency)
@@ -410,7 +489,7 @@ xi.job_utils.geomancer.doIndiSpell = function(caster, target, spell)
 
     windenedCompassCheck(caster)
 
-    target:addStatusEffectEx(xi.effect.COLURE_ACTIVE, xi.effect.COLURE_ACTIVE, visualEffect, 3, duration, effect, potency, targetType, xi.effectFlag.AURA)
+    target:addStatusEffect(xi.effect.COLURE_ACTIVE, { power = visualEffect, duration = duration, origin = caster, tick = 3, subType = effect, subPower = potency, tier = targetType, flag = xi.effectFlag.AURA })
 
     if caster:hasStatusEffect(xi.effect.ENTRUST) then
         caster:delStatusEffectSilent(xi.effect.ENTRUST)
@@ -467,7 +546,7 @@ xi.job_utils.geomancer.spawnLuopan = function(player, target, spell)
 
     if player:hasStatusEffect(xi.effect.BLAZE_OF_GLORY) then
         player:delStatusEffect(xi.effect.BLAZE_OF_GLORY)
-        luopan:setHP((luopan:getMaxHP() / 2) + (luopan:getMaxHP() * (0.01 * player:getJobPointLevel(xi.jp.BLAZE_OF_GLORY_EFFECT))))
+        luopan:setHP(luopan:getMaxHP() / 2 + luopan:getMaxHP() * 0.01 * player:getJobPointLevel(xi.jp.BLAZE_OF_GLORY_EFFECT))
     end
 
     -- Set HP loss over time

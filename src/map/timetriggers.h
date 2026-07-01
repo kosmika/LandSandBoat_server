@@ -24,7 +24,8 @@
 
 #include "common/cbasetypes.h"
 #include "common/singleton.h"
-#include "entities/npcentity.h"
+#include "common/vana_time.h"
+#include "entities/npc_entity.h"
 #include <vector>
 
 struct Trigger_t
@@ -33,8 +34,8 @@ struct Trigger_t
 
     CNpcEntity* npc; // NPC entity that the trigger belongs to
 
-    uint16 period;       // The time in vanadiel minutes between two firings of the trigger
-    uint16 minuteOffset; // The time in vanadiel minutes after SE epoch which the period syncs to
+    vanadiel_time::duration period;       // The vanadiel time between two firings of the trigger
+    vanadiel_time::duration minuteOffset; // The vanadiel time after SE epoch which the period syncs to
 
     uint32 lastTrigger; // Used to store the last firing of the trigger
 };

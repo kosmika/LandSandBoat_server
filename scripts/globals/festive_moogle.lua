@@ -1,9 +1,8 @@
 -----------------------------------
 -- Festive Moogle
 -----------------------------------
-require('scripts/globals/crafting/crafting_utils')
+require('scripts/globals/hobbies/crafting/utils')
 require('scripts/globals/npc_util')
-require('scripts/globals/utils')
 -----------------------------------
 xi = xi or {}
 xi.festiveMoogle = {}
@@ -414,11 +413,13 @@ xi.festiveMoogle.onTrade = function(player, npc, trade)
             -- appears to only be valid for the equipment category, and not for items.
             if rewardItems[pellType][1] then
                 for bitPos, rewardItemId in pairs(rewardItems[pellType][1]) do
-                    local itemObj = GetItemByID(rewardItemId)
+                    local itemObj      = GetItemByID(rewardItemId)
+                    local itemObjFlags = GetItemFlagsByID(rewardItemId)
 
+                    -- check nil of item, since GetItemFlagsByID can't return nil (but we can't fetch from it yet either)
                     if
                         itemObj and
-                        bit.band(itemObj:getFlag(), xi.itemFlag.RARE) ~= 0 and
+                        bit.band(itemObjFlags, xi.itemFlag.RARE) ~= 0 and
                         player:hasItem(rewardItemId)
                     then
                         equipmentMask = utils.mask.setBit(equipmentMask, bitPos, true)

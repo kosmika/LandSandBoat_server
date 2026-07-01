@@ -22,17 +22,22 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <chrono>
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <queue>
 #include <span>
 #include <utility>
 #include <vector>
 
 #include "macros.h"
+#include "tracy.h"
 
-// typedef/using
+#include "types/flag.h"
+
 using int8  = std::int8_t;
 using int16 = std::int16_t;
 using int32 = std::int32_t;
@@ -70,19 +75,7 @@ inline void destroy_arr(T*& ptr)
     ptr = nullptr;
 }
 
-#include <chrono>
-
 using namespace std::literals::chrono_literals;
-using server_clock = std::chrono::system_clock;
-using time_point   = server_clock::time_point;
-using duration     = server_clock::duration;
-
-// Not used so as not to accidentally mix with server_clock
-// using hires_clock      = std::chrono::high_resolution_clock;
-// using hires_time_point = hires_clock::time_point;
-// using hires_duration   = hires_clock::duration;
-
-#include <queue>
 
 template <class T>
 using MinHeap = std::priority_queue<T, std::vector<T>, std::greater<T>>;
@@ -99,4 +92,5 @@ struct PtrGreater
 template <class T>
 using MinHeapPtr = std::priority_queue<T, std::vector<T>, PtrGreater<T>>;
 
-#include "tracy.h"
+using NetworkBuffer = std::array<uint8, 2500U>; // TODO: Bring constants in here
+using ByteSpan      = std::span<uint8>;

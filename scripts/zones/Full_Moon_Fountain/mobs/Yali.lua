@@ -11,9 +11,9 @@ entity.onMobInitialize = function(mob)
 end
 
 entity.onMobSpawn = function(mob)
-end
-
-entity.onMobDeath = function(mob, player, optParams)
+    mob:addImmunity(xi.immunity.DARK_SLEEP)
+    mob:addImmunity(xi.immunity.SILENCE)
+    mob:addImmunity(xi.immunity.TERROR)
 end
 
 return entity

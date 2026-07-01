@@ -4,7 +4,6 @@
 -- https://ffxiclopedia.fandom.com/wiki/A_Chocobo_Riding_Game
 -----------------------------------
 require('scripts/globals/packet')
-require('scripts/globals/utils')
 -----------------------------------
 local bastokID   = zones[xi.zone.BASTOK_MINES]
 local sandoriaID = zones[xi.zone.SOUTHERN_SAN_DORIA]
@@ -18,21 +17,21 @@ local raceData =
 {
     [xi.zone.WINDURST_WOODS] =
     {
-        [xi.zone.SAUROMUGUE_CHAMPAIGN] = { gameDay = 0, reward = xi.item.WINDURST_WOODS_GLYPH, raceTimes = 930,            npc = windurstID.npc.ORLAINE, eventParam = 3, finishEvent = 901 },
+        [xi.zone.SAUROMUGUE_CHAMPAIGN] = { gameDay = 0, reward = xi.item.WINDURST_WOODS_GLYPH, raceTimes = { 930 },        npc = windurstID.npc.ORLAINE, eventParam = 3, finishEvent = 901 },
         [xi.zone.WEST_RONFAURE]        = { gameDay = 1, reward = xi.item.MIRATETES_MEMOIRS,    raceTimes = { 1717, 1800 }, npc = windurstID.npc.SARIALE, eventParam = 0, finishEvent = 55  },
         [xi.zone.SOUTH_GUSTABERG]      = { gameDay = 2, reward = xi.item.MIRATETES_MEMOIRS,    raceTimes = { 1950, 2084 }, npc = windurstID.npc.AMIMI,   eventParam = 1, finishEvent = 907 },
     },
     [xi.zone.BASTOK_MINES] =
     {
         [xi.zone.EAST_SARUTABARUTA] = { gameDay = 0, reward = xi.item.MIRATETES_MEMOIRS,  raceTimes = { 1950, 2040 }, npc = bastokID.npc.AZETTE,  eventParam = 2, finishEvent = 901 },
-        [xi.zone.ROLANBERRY_FIELDS] = { gameDay = 1, reward = xi.item.BASTOK_MINES_GLYPH, raceTimes = 1130,           npc = bastokID.npc.EULAPHE, eventParam = 3, finishEvent = 901 },
+        [xi.zone.ROLANBERRY_FIELDS] = { gameDay = 1, reward = xi.item.BASTOK_MINES_GLYPH, raceTimes = { 1130 },       npc = bastokID.npc.EULAPHE, eventParam = 3, finishEvent = 901 },
         [xi.zone.WEST_RONFAURE]     = { gameDay = 2, reward = xi.item.DRAGON_CHRONICLES,  raceTimes = { 1214, 1260 }, npc = bastokID.npc.QUELLE,  eventParam = 0, finishEvent = 55  },
     },
     [xi.zone.SOUTHERN_SAN_DORIA] =
     {
         [xi.zone.SOUTH_GUSTABERG]   = { gameDay = 0, reward = xi.item.DRAGON_CHRONICLES,   raceTimes = { 1200, 1248 }, npc = sandoriaID.npc.CAMEREINE, eventParam = 1, finishEvent = 907 },
         [xi.zone.EAST_SARUTABARUTA] = { gameDay = 1, reward = xi.item.MIRATETES_MEMOIRS,   raceTimes = { 1699, 1800 }, npc = sandoriaID.npc.EMOUSSINE, eventParam = 2, finishEvent = 901 },
-        [xi.zone.BATALLIA_DOWNS]    = { gameDay = 2, reward = xi.item.EAST_SANDORIA_GLYPH, raceTimes = 795,            npc = sandoriaID.npc.MEUNEILLE, eventParam = 3, finishEvent = 906 },
+        [xi.zone.BATALLIA_DOWNS]    = { gameDay = 2, reward = xi.item.EAST_SANDORIA_GLYPH, raceTimes = { 795 },        npc = sandoriaID.npc.MEUNEILLE, eventParam = 3, finishEvent = 906 },
     },
     [xi.zone.KAZHAM] =
     {
@@ -47,6 +46,14 @@ local defaultRewards =
     xi.item.BUNCH_OF_GYSAHL_GREENS
 }
 
+-- Destination cities that route through Jeuno (only two reward tiers)
+local jeunoDestinations =
+{
+    xi.zone.ROLANBERRY_FIELDS,
+    xi.zone.SAUROMUGUE_CHAMPAIGN,
+    xi.zone.BATALLIA_DOWNS,
+}
+
 -- Checks if the NPC can start a race and the player hasn't already participated this week
 xi.chocoboGame.raceCheck = function(player, npc)
     local zoneId = player:getZoneID()
@@ -58,7 +65,7 @@ xi.chocoboGame.raceCheck = function(player, npc)
 
     -- Calculate time race is available
     -- Should match https://www.mithrapride.org/vana_time/chocoracetable.html
-    local gameDay = math.floor(VanadielTime() / 3456) -- Get current number of Vana'diel days
+    local gameDay         = math.floor(VanadielTime() / 3456) -- Get current number of Vana'diel days
     local adjustedGameDay = gameDay % 3
 
     -- Check if npc offers the currently available race
@@ -81,22 +88,22 @@ xi.chocoboGame.startRaceEvent = function(player, destination, eventSucceed)
     local eventParam = raceData[zoneId][destination].eventParam
 
     -- Temp destination var until player confirms race
-    player:setLocalVar('[ChocoGame]DestCity', destination)
+    player:setCharVar('[ChocoGame]DestCity', destination)
     player:startEvent(eventSucceed, -3, 0, 0, eventParam)
 end
 
 -- Apply race vars, check for csid and option is done in chocobo.lua
 xi.chocoboGame.beginRace = function(player, option)
     if option == 0 then
-        local zoneId     = player:getZone():getID()
-        local destCity   = player:getLocalVar('[ChocoGame]DestCity')
+        local zoneId   = player:getZone():getID()
+        local destCity = player:getCharVar('[ChocoGame]DestCity')
 
         player:setCharVar('[ChocoGame]StartingCity', zoneId)
         player:setCharVar('[ChocoGame]DestCity', destCity)
         player:setCharVar('[ChocoGame]NextEntryTime', 1, NextConquestTally())
-        player:setCharVar('[ChocoGame]StartTime', os.time())
+        player:setCharVar('[ChocoGame]StartTime', GetSystemTime())
     else -- Player declined race, clearing var
-        player:setLocalVar('[ChocoGame]DestCity', 0)
+        player:setCharVar('[ChocoGame]DestCity', 0)
     end
 end
 
@@ -104,15 +111,9 @@ end
 xi.chocoboGame.rewardCheck = function(startingCity, destCity, clearTime)
     local raceTimes = raceData[startingCity][destCity].raceTimes
     local reward    = 0
-    local jeuno     =
-    {
-        xi.zone.ROLANBERRY_FIELDS,
-        xi.zone.SAUROMUGUE_CHAMPAIGN,
-        xi.zone.BATALLIA_DOWNS
-    }
 
     -- Jeuno paths only have two rewards
-    if utils.contains(destCity, jeuno) then
+    if utils.contains(destCity, jeunoDestinations) then
         if clearTime < raceTimes[1] then -- Gold
             reward = raceData[startingCity][destCity].reward
         else -- Bronze
@@ -136,19 +137,22 @@ xi.chocoboGame.onTriggerAreaEnter = function(player)
     local destCity = player:getCharVar('[ChocoGame]DestCity')
 
     if player:getZoneID() == destCity then
-        local clearTime = os.time() - player:getCharVar('[ChocoGame]StartTime')
+        local clearTime = GetSystemTime() - player:getCharVar('[ChocoGame]StartTime')
+        player:setCharVar('[ChocoGame]ClearTime', clearTime)
+
         local startingCity = player:getCharVar('[ChocoGame]StartingCity')
-        local recordId = GetServerVariable('[ChocoGame][RecordHolder]'..startingCity..'+'..destCity)
-        local recordTime = GetServerVariable('[ChocoGame][RecordTime]'..startingCity..'+'..destCity)
+        local recordId     = GetServerVariable('[ChocoGame][RecordHolder]'..startingCity..'+'..destCity)
+        local recordTime   = GetServerVariable('[ChocoGame][RecordTime]'..startingCity..'+'..destCity)
 
         -- Parse record name
         local recordName = ''
         if recordId ~= 0 then
-            recordName = GetPlayerByID(recordId):getName()
+            local recordHolder = GetPlayerByID(recordId)
+            recordName = recordHolder and recordHolder:getName() or ''
         end
 
         -- Race complete event if a record for this path exists
-        if recordName then
+        if recordName ~= '' then
             player:startEvent(raceData[startingCity][destCity].finishEvent, clearTime, 0, recordTime)
             player:updateEventString(recordName)
         -- Race complete event with no record for this path
@@ -166,9 +170,9 @@ end
 
 -- Remove chocobo and give player reward
 xi.chocoboGame.onEventFinish = function(player, csid)
-    local clearTime = os.time() - player:getCharVar('[ChocoGame]StartTime')
+    local clearTime    = player:getCharVar('[ChocoGame]ClearTime')
     local startingCity = player:getCharVar('[ChocoGame]StartingCity')
-    local destCity = player:getCharVar('[ChocoGame]DestCity')
+    local destCity     = player:getCharVar('[ChocoGame]DestCity')
 
     if
         startingCity ~= 0 and
@@ -177,21 +181,23 @@ xi.chocoboGame.onEventFinish = function(player, csid)
     then
         npcUtil.giveItem(player, xi.chocoboGame.rewardCheck(startingCity, destCity, clearTime))
         player:delStatusEffectSilent(xi.effect.MOUNTED)
+        player:setCharVar('[ChocoGame]ClearTime', 0)
     end
 end
 
 -- Effect is called when mounted effect is lost through scripts\effects\mounted.lua
 xi.chocoboGame.dismountChoco = function(player)
-    if player:getCharVar('[ChocoGame]StartTime') then
+    if player:getCharVar('[ChocoGame]StartTime') ~= 0 then
         player:setCharVar('[ChocoGame]StartTime', 0)
         player:setCharVar('[ChocoGame]StartingCity', 0)
         player:setCharVar('[ChocoGame]DestCity', 0)
+        player:setCharVar('[ChocoGame]ClearTime', 0)
     end
 end
 
 xi.chocoboGame.handleMessage = function(player)
     local startTime = player:getCharVar('[ChocoGame]StartTime')
-    local raceTime  = os.time() - startTime
+    local raceTime  = GetSystemTime() - startTime
     local ID        = zones[player:getZoneID()]
 
     -- Check if player is in race and hasn't just started

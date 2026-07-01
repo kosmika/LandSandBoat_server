@@ -16,21 +16,29 @@ local skillToAbsorb =
     [828] = xi.mod.WATER_ABSORB, -- water_blade
 }
 
+entity.onMobInitialize = function(mob)
+    mob:addImmunity(xi.immunity.SILENCE)
+    mob:addImmunity(xi.immunity.LIGHT_SLEEP)
+    mob:addImmunity(xi.immunity.DARK_SLEEP)
+    mob:addImmunity(xi.immunity.PETRIFY)
+    mob:addImmunity(xi.immunity.TERROR)
+end
+
 entity.onMobEngage = function(mob, target)
-    mob:setLocalVar('nextEnSkill', os.time() + 10)
+    mob:setLocalVar('nextEnSkill', GetSystemTime() + 10)
 end
 
 entity.onMobFight = function(mob, target)
-    if os.time() > mob:getLocalVar('nextEnSkill') then
+    if GetSystemTime() > mob:getLocalVar('nextEnSkill') then
         local skill = math.random(823, 828)
         mob:setLocalVar('currentTP', mob:getTP())
         mob:useMobAbility(skill)
-        mob:setLocalVar('nextEnSkill', os.time() + 20)
+        mob:setLocalVar('nextEnSkill', GetSystemTime() + 20)
     end
 end
 
-entity.onMobWeaponSkill = function(target, mob, skill)
-    local skillId = skill:getID()
+entity.onMobWeaponSkill = function(mob, target, skill, action)
+    local skillId  = skill:getID()
     local absorbId = skillToAbsorb[skillId]
 
     if absorbId then
@@ -54,7 +62,20 @@ entity.onMobWeaponSkill = function(target, mob, skill)
     end
 end
 
-entity.onMobDeath = function(mob, player, optParams)
+entity.onMobSpellChoose = function(mob, target)
+    local spellList =
+    {
+        [1] = { xi.magic.spell.SLOWGA,    target, false, xi.action.type.ENFEEBLING_TARGET, xi.effect.SLOW,      3, 100 },
+        [2] = { xi.magic.spell.SILENCEGA, target, false, xi.action.type.ENFEEBLING_TARGET, xi.effect.SILENCE,   0, 100 },
+        [3] = { xi.magic.spell.PARALYGA,  target, false, xi.action.type.ENFEEBLING_TARGET, xi.effect.PARALYSIS, 0, 100 },
+        [4] = { xi.magic.spell.GRAVIGA,   target, false, xi.action.type.ENFEEBLING_TARGET, xi.effect.WEIGHT,    0, 100 },
+    }
+
+    if target:hasStatusEffectByFlag(xi.effectFlag.DISPELABLE) then
+        table.insert(spellList, #spellList + 1, { xi.magic.spell.DISPELGA, target, false, xi.action.type.NONE, nil, 100 })
+    end
+
+    return xi.combat.behavior.chooseAction(mob, target, nil, spellList)
 end
 
 return entity

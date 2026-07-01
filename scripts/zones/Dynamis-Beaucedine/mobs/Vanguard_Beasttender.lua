@@ -12,11 +12,16 @@ local ID = zones[xi.zone.DYNAMIS_BEAUCEDINE]
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobDeath = function(mob, player, optParams)
+entity.onMobInitialize = function(mob)
+    xi.pet.setMobPet(mob, 1, 'Vanguards_Scorpion')
+end
+
+entity.onMobSpawn = function(mob)
+    xi.dynamis.mobInfo(mob)
 end
 
 entity.onMobDespawn = function(mob)
-    xi.mob.phOnDespawn(mob, ID.mob.SOGHO_ADDERHANDLER_PH, 10, 1200) -- 20 minutes
+    xi.mob.phOnDespawn(mob, ID.mob.SOGHO_ADDERHANDLER, 10, 1200) -- 20 minutes
 end
 
 return entity

@@ -24,11 +24,11 @@
 #include "ai/controllers/mob_controller.h"
 #include "ai/controllers/pet_controller.h"
 #include "ai/controllers/player_controller.h"
-#include "entities/baseentity.h"
-#include "entities/battleentity.h"
-#include "entities/charentity.h"
-#include "entities/mobentity.h"
-#include "packets/entity_animation.h"
+#include "entities/base_entity.h"
+#include "entities/battle_entity.h"
+#include "entities/char_entity.h"
+#include "entities/mob_entity.h"
+#include "packets/s2c/0x038_schedulor.h"
 #include "states/ability_state.h"
 #include "states/attack_state.h"
 #include "states/death_state.h"
@@ -38,9 +38,7 @@
 #include "states/magic_state.h"
 #include "states/mobskill_state.h"
 #include "states/petskill_state.h"
-#include "states/raise_state.h"
 #include "states/range_state.h"
-#include "states/respawn_state.h"
 #include "states/synth_state.h"
 #include "states/trigger_state.h"
 #include "states/weaponskill_state.h"
@@ -51,13 +49,15 @@ CAIContainer::CAIContainer(CBaseEntity* _PEntity)
 {
 }
 
-CAIContainer::CAIContainer(CBaseEntity* _PEntity, std::unique_ptr<CPathFind>&& _pathfind, std::unique_ptr<CController>&& _controller,
+CAIContainer::CAIContainer(CBaseEntity*                   _PEntity,
+                           std::unique_ptr<CPathFind>&&   _pathfind,
+                           std::unique_ptr<CController>&& _controller,
                            std::unique_ptr<CTargetFind>&& _targetfind)
 : TargetFind(std::move(_targetfind))
 , PathFind(std::move(_pathfind))
 , Controller(std::move(_controller))
-, m_Tick(server_clock::now())
-, m_PrevTick(server_clock::now())
+, m_Tick(timer::now())
+, m_PrevTick(timer::now())
 , PEntity(_PEntity)
 , ActionQueue(_PEntity)
 {
@@ -108,12 +108,12 @@ bool CAIContainer::WeaponSkill(uint16 targid, uint16 wsid)
     return false;
 }
 
-bool CAIContainer::MobSkill(uint16 targid, uint16 wsid)
+bool CAIContainer::MobSkill(uint16 targid, uint16 wsid, Maybe<timer::duration> castTimeOverride)
 {
     auto* AIController = dynamic_cast<CMobController*>(Controller.get());
     if (AIController)
     {
-        return AIController->MobSkill(targid, wsid);
+        return AIController->MobSkill(targid, wsid, castTimeOverride);
     }
     return false;
 }
@@ -139,10 +139,9 @@ bool CAIContainer::Ability(uint16 targid, uint16 abilityid)
 
 bool CAIContainer::RangedAttack(uint16 targid)
 {
-    auto* PlayerController = dynamic_cast<CPlayerController*>(Controller.get());
-    if (PlayerController)
+    if (Controller)
     {
-        return PlayerController->RangedAttack(targid);
+        return Controller->RangedAttack(targid);
     }
     return false;
 }
@@ -155,7 +154,7 @@ bool CAIContainer::Trigger(CCharEntity* player)
     if (CanChangeState())
     {
         auto ret = ChangeState<CTriggerState>(PEntity, player->targid, isDoor);
-        if (PathFind)
+        if (PathFind && PEntity->GetLocalVar("stopPathingOnTrigger") == 1)
         {
             PEntity->SetLocalVar("pauseNPCPathing", 1);
         }
@@ -174,12 +173,12 @@ bool CAIContainer::UseItem(uint16 targid, uint8 loc, uint8 slotid)
     return false;
 }
 
-bool CAIContainer::Inactive(duration _duration, bool canChangeState)
+bool CAIContainer::Inactive(timer::duration _duration, bool canChangeState)
 {
     return ForceChangeState<CInactiveState>(PEntity, _duration, canChangeState, false);
 }
 
-bool CAIContainer::Untargetable(duration _duration, bool canChangeState)
+bool CAIContainer::Untargetable(timer::duration _duration, bool canChangeState)
 {
     return ForceChangeState<CInactiveState>(PEntity, _duration, canChangeState, true);
 }
@@ -208,7 +207,7 @@ bool CAIContainer::Internal_Engage(uint16 targetid)
         {
             if (ForceChangeState<CAttackState>(entity, targetid))
             {
-                entity->OnEngage(*static_cast<CAttackState*>(m_stateStack.top().get()));
+                entity->OnEngage(*static_cast<CAttackState*>(GetCurrentState()));
 
                 // Resume being inactive if entity has a status effect preventing them from doing actions
                 if (entity->StatusEffectContainer->HasPreventActionEffect(true))
@@ -279,7 +278,7 @@ bool CAIContainer::Internal_WeaponSkill(uint16 targid, uint16 wsid)
     return false;
 }
 
-bool CAIContainer::Internal_MobSkill(uint16 targid, uint16 wsid)
+bool CAIContainer::Internal_MobSkill(uint16 targid, uint16 wsid, Maybe<timer::duration> castTimeOverride)
 {
     auto* entity = dynamic_cast<CBattleEntity*>(PEntity);
     if (entity)
@@ -288,7 +287,7 @@ bool CAIContainer::Internal_MobSkill(uint16 targid, uint16 wsid)
         {
             return false;
         }
-        return ChangeState<CMobSkillState>(entity, targid, wsid);
+        return ChangeState<CMobSkillState>(entity, targid, wsid, castTimeOverride);
     }
     return false;
 }
@@ -335,22 +334,12 @@ bool CAIContainer::Internal_RangedAttack(uint16 targetid)
     return false;
 }
 
-bool CAIContainer::Internal_Die(duration deathTime)
+bool CAIContainer::Internal_Die(timer::duration deathTime)
 {
     auto* entity = dynamic_cast<CBattleEntity*>(PEntity);
     if (entity)
     {
         return ChangeState<CDeathState>(entity, deathTime);
-    }
-    return false;
-}
-
-bool CAIContainer::Internal_Raise()
-{
-    auto* entity = dynamic_cast<CBattleEntity*>(PEntity);
-    if (entity)
-    {
-        return ForceChangeState<CRaiseState>(entity);
     }
     return false;
 }
@@ -367,11 +356,31 @@ bool CAIContainer::Internal_UseItem(uint16 targetid, uint8 loc, uint8 slotid)
 
 CState* CAIContainer::GetCurrentState()
 {
-    if (!m_stateStack.empty())
+    return m_currentState.get();
+}
+
+void CAIContainer::enterState(std::unique_ptr<CState> next)
+{
+    // Suspend the state we're leaving beneath the new one, which becomes current.
+    if (m_currentState)
     {
-        return m_stateStack.top().get();
+        m_stateStack.push(std::move(m_currentState));
     }
-    return nullptr;
+    m_currentState = std::move(next);
+}
+
+void CAIContainer::resumeNextState()
+{
+    // The current state is finished; resume the one suspended beneath it, or go idle.
+    if (m_stateStack.empty())
+    {
+        m_currentState.reset();
+    }
+    else
+    {
+        m_currentState = std::move(m_stateStack.top());
+        m_stateStack.pop();
+    }
 }
 
 bool CAIContainer::CanChangeState()
@@ -406,30 +415,33 @@ void CAIContainer::Reset()
         Controller->Reset();
     }
 
+    m_currentState.reset();
     while (!m_stateStack.empty())
     {
         m_stateStack.pop();
     }
 }
 
-void CAIContainer::Tick(time_point _tick)
+auto CAIContainer::Tick(timer::time_point tick) -> Task<void>
 {
     TracyZoneScoped;
+
     m_PrevTick = m_Tick;
-    m_Tick     = _tick;
+    m_Tick     = tick;
 
     // TODO: timestamp in the event?
     EventHandler.triggerListener("TICK", PEntity);
-    PEntity->Tick(_tick);
+
+    co_await PEntity->Tick(tick);
 
     // TODO: check this in the controller instead maybe? (might not want to check every tick)
-    ActionQueue.checkAction(_tick);
+    ActionQueue.checkAction(tick);
 
     // check pathfinding only if there is no controller to do it
     bool isPathingPaused = PEntity->GetLocalVar("pauseNPCPathing");
     if (!Controller && CanFollowPath() && !isPathingPaused)
     {
-        PathFind->FollowPath(_tick);
+        PathFind->FollowPath(tick);
         if (PathFind->OnPoint())
         {
             EventHandler.triggerListener("PATH", PEntity);
@@ -439,42 +451,82 @@ void CAIContainer::Tick(time_point _tick)
 
     if (Controller && Controller->canUpdate)
     {
-        Controller->Tick(_tick);
+        co_await Controller->Tick(tick);
     }
-    CState* top = nullptr;
-    while (!m_stateStack.empty() && (top = m_stateStack.top().get())->DoUpdate(_tick))
+
+    //
+    // The current state is held in m_currentState (not on the stack) while it runs, so a
+    // re-entrant change can't free the object we're executing in. Entering a state only
+    // suspends the current one beneath it, never frees it.
+    //
+
+    // The guard is a backstop against
+    // a state that completes and re-enters itself every iteration (the stack is capped at
+    // 10, so a healthy tick drains well within this bound).
+    int guard = 0;
+
+    while (m_currentState)
     {
-        if (top == GetCurrentState())
+        if (++guard > 32)
         {
-            auto state = std::move(m_stateStack.top());
-            m_stateStack.pop();
-            state->Cleanup(_tick);
+            ShowWarning("AI state loop exceeded its iteration bound; breaking to avoid a hang.");
+            break;
+        }
+
+        CState* running = m_currentState.get();
+
+        if (running->DoUpdate(tick))
+        {
+            // A state can enter a successor during its own update (e.g. petskill
+            // re-engages), which becomes current. Only retire the state we actually ran.
+            if (running == m_currentState.get())
+            {
+                running->Cleanup(tick);
+                resumeNextState();
+            }
+        }
+        else // Not finished: leave it current and stop.
+        {
+            break;
         }
     }
 
+    // Magic and mobskill states decide their own interrupt at their finish (mid-action
+    // prevent-action effects don't cancel them on retail), so we never force them inactive
+    // from here. Once such a state ends, this poll parks the entity inactive.
+    if (auto* battle = dynamic_cast<CBattleEntity*>(PEntity);
+        battle && battle->isAlive() && !IsCurrentState<CInactiveState>() &&
+        !IsCurrentState<CMagicState>() && !IsCurrentState<CMobSkillState>() &&
+        battle->StatusEffectContainer->HasPreventActionEffect())
+    {
+        Inactive(0ms, false);
+    }
+
     PEntity->PostTick();
+
+    co_return;
 }
 
 bool CAIContainer::IsStateStackEmpty()
 {
-    return m_stateStack.empty();
+    return !m_currentState;
 }
 
 void CAIContainer::ClearStateStack()
 {
-    while (!m_stateStack.empty())
+    while (m_currentState)
     {
-        m_stateStack.top()->Cleanup(server_clock::now());
-        m_stateStack.pop();
+        m_currentState->Cleanup(timer::now());
+        resumeNextState();
     }
 }
 
 void CAIContainer::InterruptStates()
 {
-    while (!m_stateStack.empty() && m_stateStack.top()->CanInterrupt())
+    while (m_currentState && m_currentState->CanInterrupt())
     {
-        m_stateStack.top()->Cleanup(server_clock::now());
-        m_stateStack.pop();
+        m_currentState->Cleanup(timer::now());
+        resumeNextState();
     }
 }
 
@@ -498,12 +550,12 @@ bool CAIContainer::IsUntargetable()
     return (PEntity->PAI->IsCurrentState<CInactiveState>() && static_cast<CInactiveState*>(PEntity->PAI->GetCurrentState())->GetUntargetable()) || PEntity->GetUntargetable();
 }
 
-time_point CAIContainer::getTick()
+timer::time_point CAIContainer::getTick()
 {
     return m_Tick;
 }
 
-time_point CAIContainer::getPrevTick()
+timer::time_point CAIContainer::getPrevTick()
 {
     return m_PrevTick;
 }
@@ -542,23 +594,14 @@ void CAIContainer::ClearTimerQueue()
 
 void CAIContainer::checkQueueImmediately()
 {
-    ActionQueue.checkAction(server_clock::now());
+    ActionQueue.checkAction(timer::now());
 }
 
 bool CAIContainer::Internal_Despawn(bool instantDespawn)
 {
-    if (!IsCurrentState<CDespawnState>() && !IsCurrentState<CRespawnState>())
+    if (!IsCurrentState<CDespawnState>())
     {
         return ForceChangeState<CDespawnState>(PEntity, instantDespawn);
-    }
-    return false;
-}
-
-bool CAIContainer::Internal_Respawn(duration _duration)
-{
-    if (!IsCurrentState<CRespawnState>())
-    {
-        return ForceChangeState<CRespawnState>(PEntity, _duration);
     }
     return false;
 }
@@ -575,9 +618,23 @@ bool CAIContainer::Internal_Synth(SKILLTYPE synthSkill)
 
 void CAIContainer::CheckCompletedStates()
 {
-    while (!m_stateStack.empty() && m_stateStack.top()->IsCompleted())
+    while (m_currentState && m_currentState->IsCompleted())
     {
-        m_stateStack.top()->Cleanup(server_clock::now());
-        m_stateStack.pop();
+        m_currentState->Cleanup(timer::now());
+        resumeNextState();
     }
+}
+
+bool CAIContainer::Accept_Raise()
+{
+    if (IsCurrentState<CDeathState>())
+    {
+        static_cast<CDeathState*>(PEntity->PAI->GetCurrentState())->acceptRaise();
+    }
+    return false;
+}
+
+size_t CAIContainer::stateCount() const
+{
+    return m_stateStack.size() + (m_currentState ? 1 : 0);
 }

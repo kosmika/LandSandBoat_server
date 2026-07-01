@@ -53,7 +53,7 @@ instanceObject.onInstanceProgressUpdate = function(instance, progress)
 end
 
 instanceObject.onInstanceComplete = function(instance)
-    xi.assault.onInstanceComplete(instance, 8, 8)
+    xi.assault.onInstanceComplete(instance, 5, 11)
 end
 
 instanceObject.onEventFinish = function(player, csid, option, npc)
@@ -362,7 +362,7 @@ instanceObject.onTrack = function(instance)
                 enemys:isSpawned()
             then
                 if mobChatMessage == 0 then
-                    mob:setLocalVar('runTimer', os.time() + math.random(20, 40))
+                    mob:setLocalVar('runTimer', GetSystemTime() + math.random(20, 40))
                     mob:setLocalVar('mobChatMessage', 1)
                     mob:setLocalVar('moveStatus', 1)
                     mob:setLocalVar('runStart', 1)
@@ -370,7 +370,7 @@ instanceObject.onTrack = function(instance)
                         mob:showText(mob, ID.text.EXCALIACE_CRAB2)
                         break
                     else
-                        if enemys:getFamily() == 1011 then -- crab
+                        if enemys:getFamily() == xi.mobFamily.CRAB then -- crab
                             if pathProgressMask == 7 then
                                 mob:setLocalVar('pathPoint', 38)
                             elseif pathProgressMask == 3 then
@@ -383,11 +383,11 @@ instanceObject.onTrack = function(instance)
                             mob:showText(mob, ID.text.EXCALIACE_CRAB1)
                             mob:setBaseSpeed(60)
                             break
-                        elseif enemys:getFamily() == 197 then -- pugil
+                        elseif enemys:getFamily() == xi.mobFamily.PUGIL then -- pugil
                             mob:setBaseSpeed(75)
                             mob:showText(mob, ID.text.EXCALIACE_DEBAUCHER1)
                             break
-                        elseif enemys:getFamily() == 86 then -- doomed
+                        elseif enemys:getFamily() == xi.mobFamily.DOOMED then -- doomed
                             mob:setBaseSpeed(100)
                             mob:showText(mob, ID.text.EXCALIACE_DEBAUCHER2)
                             break
@@ -414,8 +414,8 @@ instanceObject.onTrack = function(instance)
                 rangeFollow = true
             end
 
-            if stopTimer + 5 <= os.time() then
-                mob:setLocalVar('stopTimer', os.time())
+            if stopTimer + 5 <= GetSystemTime() then
+                mob:setLocalVar('stopTimer', GetSystemTime())
                 if rangeStop then
                     mob:setLocalVar('constantMove', 0)
                     mob:setLocalVar('moveStatus', 0)
@@ -454,8 +454,8 @@ instanceObject.onTrack = function(instance)
             end
 
             if rangeFollow then
-                mob:setLocalVar('runTimeCheck', os.time() + 10) --  wont run off if closer than 10 yalms
-            elseif runTimeCheck <= os.time() then
+                mob:setLocalVar('runTimeCheck', GetSystemTime() + 10) --  wont run off if closer than 10 yalms
+            elseif runTimeCheck <= GetSystemTime() then
                 mob:setLocalVar('moveStatus', 1)
             end
         end
@@ -483,7 +483,7 @@ instanceObject.onTrack = function(instance)
             if moveStatus == 0 then
                 mob:setLocalVar('pathPoint', pathPoint + 1)
             else
-                if runTimer >= os.time() then
+                if runTimer >= GetSystemTime() then
                     mob:setLocalVar('pathPoint', pathPoint - 1)
                 else
                     if runStart == 1 then
@@ -491,7 +491,7 @@ instanceObject.onTrack = function(instance)
                         if lockToggle == 0 then
                             mob:showText(mob, ID.text.EXCALIACE_TIRED)
                             mob:timer(15000, function(mobArg)
-                                mobArg:setLocalVar('runTimer', os.time() + math.random(20, 40))
+                                mobArg:setLocalVar('runTimer', GetSystemTime() + math.random(20, 40))
                                 mobArg:setLocalVar('moveLock', 1)
                                 mobArg:setLocalVar('lockToggle', 0)
                             end)
@@ -499,7 +499,7 @@ instanceObject.onTrack = function(instance)
                             mob:setLocalVar('lockToggle', 1)
                         end
                     else
-                        mob:setLocalVar('runTimer', os.time() + math.random(30, 40))
+                        mob:setLocalVar('runTimer', GetSystemTime() + math.random(30, 40))
                         mob:showText(mob, ID.text.EXCALIACE_RUN)
                         mob:setLocalVar('runStart', 1)
                         mob:setBaseSpeed(100)

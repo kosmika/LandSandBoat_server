@@ -8,18 +8,20 @@ local ID = zones[xi.zone.QUICKSAND_CAVES]
 ---@type TMobEntity
 local entity = {}
 
-local nussknackerPHTable =
-{
-    [ID.mob.NUSSKNACKER - 7] = ID.mob.NUSSKNACKER, -- 189 2 4
-    [ID.mob.NUSSKNACKER - 6] = ID.mob.NUSSKNACKER, -- 200 2 -4
-}
-
 entity.onMobDeath = function(mob, player, optParams)
     xi.regime.checkRegime(player, mob, 817, 1, xi.regime.type.GROUNDS)
 end
 
 entity.onMobDespawn = function(mob)
-    xi.mob.phOnDespawn(mob, nussknackerPHTable, 5, 3600) -- 1 hour
+    local zone = mob:getZone()
+    if not zone then
+        return
+    end
+
+    -- TODO: Need to check if it can pop if the PH was killed BEFORE the sandstorm appeared
+    if zone:getWeather() == xi.weather.SAND_STORM then
+        xi.mob.phOnDespawn(mob, ID.mob.NUSSKNACKER, 20, 3600) -- 1 hour
+    end
 end
 
 return entity

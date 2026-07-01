@@ -23,7 +23,7 @@
 #include "ai/ai_container.h"
 #include "items/item_weapon.h"
 #include "mob_modifier.h"
-#include "packets/inventory_finish.h"
+#include "packets/s2c/0x01d_item_same.h"
 #include "status_effect_container.h"
 
 /************************************************************************
@@ -58,8 +58,17 @@ CAttackRound::CAttackRound(CBattleEntity* attacker, CBattleEntity* defender)
     {
         if (IsH2H()) // Build H2H attacks.
         {
+            bool h2hSingleSwing = false;
+            if (dynamic_cast<CMobEntity*>(m_attacker))
+            {
+                h2hSingleSwing = static_cast<CMobEntity*>(m_attacker)->getMobMod(MOBMOD_H2H_SINGLE_SWING) > 0;
+            }
+
             CreateAttacks(PMain, LEFTATTACK);
-            CreateAttacks(PMain, LEFTATTACK);
+            if (!h2hSingleSwing)
+            {
+                CreateAttacks(PMain, LEFTATTACK);
+            }
         }
         else // Build main weapon attacks.
         {
@@ -67,7 +76,7 @@ CAttackRound::CAttackRound(CBattleEntity* attacker, CBattleEntity* defender)
         }
     }
 
-    if (PSub && attacker->m_dualWield)
+    if (PSub && attacker->IsDualWielding())
     {
         CreateAttacks(PSub, LEFTATTACK);
     }
@@ -85,10 +94,7 @@ CAttackRound::CAttackRound(CBattleEntity* attacker, CBattleEntity* defender)
     m_attackSwings[0].SetAsFirstSwing();
 
     // Delete the haste samba effect.
-    attacker->StatusEffectContainer->DelStatusEffect(EFFECT_HASTE_SAMBA_HASTE);
-
-    // Clear the action list.
-    attacker->m_ActionList.clear();
+    attacker->StatusEffectContainer->DelStatusEffect(xi::StatusEffect::HasteSambaHaste);
 }
 
 /************************************************************************
@@ -310,10 +316,10 @@ void CAttackRound::CreateAttacks(CItemWeapon* PWeapon, PHYSICAL_ATTACK_DIRECTION
 
     // Preference matters! The following are additional hits to the default hit that don't stack up
     // Mikage > Quad > Triple > Double > Mythic Aftermath > Occasionally Attacks > Hasso + Zanshin
-    // Daken is handled separately in CreateDakenAttack() and Zanshin in src/map/entities/battleentity.cpp#L1768
+    // Daken is handled separately in CreateDakenAttack() and Zanshin in src/map/entities/battle_entity.cpp#L1768
 
     // Checking Mikage Effect - Hits Vary With Num of Utsusemi Shadows for Main Weapon
-    if (m_attacker->StatusEffectContainer->HasStatusEffect(EFFECT_MIKAGE) && m_attacker->m_Weapons[SLOT_MAIN] && m_attacker->m_Weapons[SLOT_MAIN]->getID() == PWeapon->getID())
+    if (m_attacker->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Mikage) && m_attacker->m_Weapons[SLOT_MAIN] && m_attacker->m_Weapons[SLOT_MAIN]->getID() == PWeapon->getID())
     {
         auto shadows = (uint8)m_attacker->getMod(Mod::UTSUSEMI);
         AddAttackSwing(PHYSICAL_ATTACK_TYPE::NORMAL, direction, shadows);
@@ -429,8 +435,9 @@ void CAttackRound::ProcFollowUpAttacks()
 
                         if (PAmmo && PAmmo->getID() == virtueStone && PAmmo->getQuantity() > 0)
                         {
-                            uint8 loc  = PChar->equipLoc[SLOT_AMMO];
-                            uint8 slot = PChar->equip[SLOT_AMMO];
+                            auto  eloc = PChar->equipLocation(SLOT_AMMO);
+                            uint8 loc  = eloc ? static_cast<uint8>(eloc->Container) : 0;
+                            uint8 slot = eloc ? eloc->Slot : 0;
 
                             if (AddFollowUpAttack(direction))
                             {
@@ -441,7 +448,7 @@ void CAttackRound::ProcFollowUpAttacks()
                                 }
 
                                 charutils::UpdateItem(PChar, loc, slot, -1);
-                                PChar->pushPacket<CInventoryFinishPacket>();
+                                PChar->pushPacket<GP_SERV_COMMAND_ITEM_SAME>(PChar);
                             }
                         }
                     }
@@ -488,12 +495,12 @@ bool CAttackRound::AddFollowUpAttack(PHYSICAL_ATTACK_DIRECTION direction)
  ************************************************************************/
 void CAttackRound::CreateKickAttacks()
 {
-    if (m_attacker->objtype == TYPE_PC && IsH2H())
+    if (IsH2H())
     {
         // kick attack mod (All jobs)
         uint16 kickAttack = m_attacker->getMod(Mod::KICK_ATTACK_RATE);
 
-        if (m_attacker->GetMJob() == JOB_MNK) // MNK (Main job)
+        if (m_attacker->GetMJob() == JOB_MNK && m_attacker->objtype == TYPE_PC) // MNK (Main job)
         {
             kickAttack += ((CCharEntity*)m_attacker)->PMeritPoints->GetMeritValue(MERIT_KICK_ATTACK_RATE, (CCharEntity*)m_attacker);
         }

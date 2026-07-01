@@ -8,9 +8,6 @@ local ID = zones[xi.zone.ARRAPAGO_REMNANTS]
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobSpawn = function(mob)
-end
-
 entity.onMobFight = function(mob, target)
     local instance  = mob:getInstance()
     local popTime   = mob:getLocalVar('lastPetPop')
@@ -18,18 +15,18 @@ entity.onMobFight = function(mob, target)
     local firstPet  = GetMobByID((mob:getID() + 1), instance)
     local secondPet = GetMobByID((mob:getID() + 2), instance)
 
-    if os.time() - popTime > 15 then
+    if GetSystemTime() - popTime > 15 then
         if firstPet and not firstPet:isSpawned() then
             firstPet:setSpawn(mobPos.x, mobPos.y, mobPos.z, mobPos.rot)
             mob:useMobAbility(2034)
-            mob:setLocalVar('lastPetPop', os.time())
+            mob:setLocalVar('lastPetPop', GetSystemTime())
             mob:timer(2500, function(m)
                 SpawnMob((m:getID() + 1), instance)
             end)
         elseif secondPet and not secondPet:isSpawned() then
             secondPet:setSpawn(mobPos.x, mobPos.y, mobPos.z, mobPos.rot)
             mob:useMobAbility(2034)
-            mob:setLocalVar('lastPetPop', os.time())
+            mob:setLocalVar('lastPetPop', GetSystemTime())
             mob:timer(2500, function(m)
                 SpawnMob((m:getID() + 2), instance)
             end)
@@ -58,9 +55,6 @@ entity.onMobDeath = function(mob, player, optParams)
             end
         end
     end
-end
-
-entity.onMobDespawn = function(mob)
 end
 
 return entity

@@ -2,6 +2,11 @@
 -- Area: Navukgo Execution Chamber
 --  Mob: Khimaira 13
 -----------------------------------
+mixins =
+{
+    require('scripts/mixins/families/khimaira'),
+}
+-----------------------------------
 ---@type TMobEntity
 local entity = {}
 
@@ -13,12 +18,6 @@ entity.onMobEngage = function(mob, target)
             allyObj:updateEnmity(mob)
         end
     end
-end
-
-entity.onMobFight = function(mob, target)
-end
-
-entity.onMobDeath = function(mob, player, optParams)
 end
 
 return entity

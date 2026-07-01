@@ -138,10 +138,10 @@ quest.sections =
                         templeID.mob.COOK_OFFSET + 3
                     }
                     if
-                        os.time() >= npc:getLocalVar('cooldown') and
+                        GetSystemTime() >= npc:getLocalVar('cooldown') and
                         npcUtil.popFromQM(player, npc, cookMobs, { claim = true, hide = 0 })
                     then
-                        npc:setLocalVar('cooldown', os.time() + 600) -- 10 minutes between repops
+                        npc:setLocalVar('cooldown', GetSystemTime() + 600) -- 10 minutes between repops
                     end
                 end,
             },
@@ -158,7 +158,7 @@ quest.sections =
         {
             ['Mhebi_Juhbily'] = quest:progressEvent(133),
 
-            ['Vah_Keshura'] =  quest:event(132),
+            ['Vah_Keshura'] = quest:event(132),
 
             onEventFinish =
             {

@@ -4,7 +4,6 @@
 require('scripts/globals/battlefield')
 require('scripts/globals/missions')
 require('scripts/globals/npc_util')
-require('scripts/globals/utils')
 -----------------------------------
 xi = xi or {}
 xi.dynamis = xi.dynamis or {}
@@ -290,10 +289,10 @@ local function arg3(player, bit)
 end
 
 local function handleEntryTime(player)
-    local realDay = os.time()
+    local realDay = GetSystemTime()
 
     if xi.settings.main.DYNA_MIDNIGHT_RESET then
-        realDay = getMidnight() - 86400
+        realDay = JstMidnight() - 86400
     end
 
     local dynaWaitxDay = player:getCharVar('dynaWaitxDay')
@@ -361,7 +360,7 @@ xi.dynamis.entryNpcOnTrigger = function(player, npc)
 
         -- dynamis entry
         elseif not info.reqs or info.reqs(player) then
-            local realDay      = os.time()
+            local realDay      = GetSystemTime()
             local dynaWaitxDay = player:getCharVar('dynaWaitxDay')
             local sjobOption   = info.csBit > 6 and 1 or 0
 
@@ -462,14 +461,10 @@ xi.dynamis.zoneOnZoneIn = function(player, prevZone)
 
     if player:getCharVar('Dynamis_Entry') == 1 or player:getGMLevel() > 0 then
         if player:getCharVar('Dynamis_subjob') == 1 then
-            player:timer(5000, function(playerArg)
-                playerArg:messageBasic(xi.msg.basic.UNABLE_TO_ACCESS_SJ)
-            end)
-
-            player:addStatusEffect(xi.effect.SJ_RESTRICTION, 0, 0, 0, 0, 0)
+            player:addStatusEffect(xi.effect.SJ_RESTRICTION, { origin = player })
         end
 
-        player:addStatusEffectEx(xi.effect.DYNAMIS, 0, 0, 3, 3600)
+        player:addStatusEffect(xi.effect.DYNAMIS, { duration = 3600, origin = player, tick = 3, icon = 0 })
         player:timer(5500, function(playerArg)
             playerArg:messageSpecial(ID.text.DYNAMIS_TIME_BEGIN, 60, xi.ki.PRISMATIC_HOURGLASS)
         end)
@@ -580,7 +575,7 @@ xi.dynamis.timeExtensionOnDeath = function(mob, player, optParams)
             if effect and not player:hasKeyItem(te.ki) then
                 npcUtil.giveKeyItem(player, te.ki)
                 local oldDuration = effect:getDuration()
-                effect:setDuration((oldDuration + (te.minutes * 60)) * 1000)
+                effect:setDuration(oldDuration + te.minutes * 60 * 1000)
                 player:setLocalVar('dynamis_lasttimeupdate', effect:getTimeRemaining() / 1000)
                 player:messageSpecial(ID.text.DYNAMIS_TIME_EXTEND, te.minutes)
             end
@@ -828,19 +823,19 @@ xi.dynamis.procMonster = function(mob, player)
                 math.random(1, 100) == 1
             then
                 mob:setLocalVar('dynamis_proc', 4)
-                mob:addStatusEffect(xi.effect.TERROR, 0, 0, 30)
+                mob:addStatusEffect(xi.effect.TERROR, { duration = 30, origin = player })
                 mob:weaknessTrigger(3)
             elseif extensions == 5 then
                 mob:setLocalVar('dynamis_proc', 3)
-                mob:addStatusEffect(xi.effect.TERROR, 0, 0, 30)
+                mob:addStatusEffect(xi.effect.TERROR, { duration = 30, origin = player })
                 mob:weaknessTrigger(2)
             elseif extensions == 4 then
                 mob:setLocalVar('dynamis_proc', 2)
-                mob:addStatusEffect(xi.effect.TERROR, 0, 0, 30)
+                mob:addStatusEffect(xi.effect.TERROR, { duration = 30, origin = player })
                 mob:weaknessTrigger(1)
             elseif extensions == 3 then
                 mob:setLocalVar('dynamis_proc', 1)
-                mob:addStatusEffect(xi.effect.TERROR, 0, 0, 30)
+                mob:addStatusEffect(xi.effect.TERROR, { duration = 30, origin = player })
                 mob:weaknessTrigger(0)
             end
         end
@@ -1125,4 +1120,11 @@ xi.dynamis.hourglassAndCurrencyExchangeNPCOnEventFinish = function(player, csid,
 
         player:setLocalVar('hundredItemBought', 0)
     end
+end
+
+xi.dynamis.mobInfo = function(mob)
+    -- No gil, no mug, enhanced damage 1.5x
+    mob:setMobMod(xi.mobMod.GIL_MAX, -1)
+    mob:setMobMod(xi.mobMod.MUG_GIL, -1)
+    mob:setMobMod(xi.mobMod.BASE_DAMAGE_MULTIPLIER, 150)
 end

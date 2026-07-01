@@ -2,8 +2,6 @@
 -- Rank 2 Final Mission
 -- Horlais Peak mission battlefield
 -----------------------------------
-local horlaisID = zones[xi.zone.HORLAIS_PEAK]
------------------------------------
 
 local content = Battlefield:new({
     zoneId        = xi.zone.HORLAIS_PEAK,
@@ -13,7 +11,7 @@ local content = Battlefield:new({
     allowTrusts   = true,
     maxPlayers    = 6,
     levelCap      = 25,
-    timeLimit     = utils.minutes(30),
+    timeLimit     = utils.minutes(15),
     index         = 0,
     entryNpc      = 'BC_Entrance',
     exitNpc       = 'Burning_Circle',
@@ -38,20 +36,6 @@ function content:checkSkipCutscene(player)
         ))
 end
 
-content.groups =
-{
-    {
-        mobIds =
-        {
-            { horlaisID.mob.DREAD_DRAGON,     horlaisID.mob.DREAD_DRAGON + 1 },
-            { horlaisID.mob.DREAD_DRAGON + 2, horlaisID.mob.DREAD_DRAGON + 3 },
-            { horlaisID.mob.DREAD_DRAGON + 4, horlaisID.mob.DREAD_DRAGON + 5 },
-        },
-
-        allDeath = function(battlefield, mob)
-            battlefield:setStatus(xi.battlefield.status.WON)
-        end,
-    },
-}
+content:addEssentialMobs({ 'Dread_Dragon', 'Spotter' })
 
 return content:register()

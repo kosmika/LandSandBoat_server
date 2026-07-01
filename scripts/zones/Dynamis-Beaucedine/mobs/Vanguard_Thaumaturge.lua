@@ -12,11 +12,12 @@ local ID = zones[xi.zone.DYNAMIS_BEAUCEDINE]
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobDeath = function(mob, player, optParams)
+entity.onMobSpawn = function(mob)
+    xi.dynamis.mobInfo(mob)
 end
 
 entity.onMobDespawn = function(mob)
-    xi.mob.phOnDespawn(mob, ID.mob.DEBHO_PYROHAND_PH, 10, 1200) -- 20 minutes
+    xi.mob.phOnDespawn(mob, ID.mob.DEBHO_PYROHAND, 10, 1200) -- 20 minutes
 end
 
 return entity

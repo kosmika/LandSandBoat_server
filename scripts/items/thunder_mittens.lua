@@ -6,13 +6,13 @@
 ---@type TItem
 local itemObject = {}
 
-itemObject.onItemCheck = function(target, item, param, caster)
+itemObject.onItemCheck = function(target, item, caster)
     return 0
 end
 
 itemObject.onItemUse = function(target)
-    local effect = xi.effect.ENTHUNDER
-    doEnspell(target, target, nil, effect)
+    local fakeSpell = GetSpell(xi.magic.spell.ENTHUNDER)
+    xi.spells.enhancing.useEnhancingSpell(target, target, fakeSpell)
 end
 
 return itemObject

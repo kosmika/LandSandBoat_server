@@ -134,3 +134,23 @@ end
 ---@return boolean
 function CStatusEffect:hasEffectFlag(flag)
 end
+
+---@nodiscard
+---@return integer
+function CStatusEffect:getSourceType()
+end
+
+---@nodiscard
+---@return integer
+function CStatusEffect:getSourceTypeParam()
+end
+
+---@nodiscard
+---@return integer
+function CStatusEffect:getOriginID()
+end
+
+---@param originId integer
+---@return nil
+function CStatusEffect:setOriginID(originId)
+end

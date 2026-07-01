@@ -26,6 +26,12 @@ end
 
 zoneObject.onZoneIn = function(player, prevZone)
     local cs = -1
+    if
+        prevZone == xi.zone.LOWER_DELKFUTTS_TOWER or
+        prevZone == xi.zone.UPPER_DELKFUTTS_TOWER
+    then
+        cs = 13 -- Teleport.
+    end
 
     if
         player:getXPos() == 0 and
@@ -40,7 +46,7 @@ end
 
 zoneObject.onTriggerAreaEnter = function(player, triggerArea)
     local triggerAreaID = triggerArea:getTriggerAreaID()
-    player:startEvent(triggerAreaID - 1)
+    player:startOptionalCutscene(triggerAreaID - 1, { cs_option = 0, canSkip = true })
 end
 
 zoneObject.onTriggerAreaLeave = function(player, triggerArea)

@@ -38,7 +38,7 @@ local checkWorldFirstServerVar = function(player, varName, worldMessage)
 
         -- Write out World First (WF) and World First Time (WT) to server vars)
         SetVolatileServerVariable(worldFirst, player:getID())
-        SetVolatileServerVariable(worldTime, os.time())
+        SetVolatileServerVariable(worldTime, GetSystemTime())
 
         -- Summon big swirly starry animation which lingers on the players client in the location
         -- where this event happened. It will linger in that area for anyone that saw it until
@@ -66,8 +66,8 @@ m:addOverride('xi.player.onPlayerLevelUp', function(player)
     for _, level in pairs(levelMilestones) do
         if player:getMainLvl() == level then
             checkWorldFirstServerVar(player,
-                string.format('JOB_%u_%s', level, xi.jobNames[player:getMainJob()][1]),
-                string.format('%s has been the first player to reach level %u on %s!', player:getName(), level, xi.jobNames[player:getMainJob()][2]))
+                string.format('JOB_%u_%s', level, xi.jobName[player:getMainJob()][1]),
+                string.format('%s has been the first player to reach level %u on %s!', player:getName(), level, xi.jobName[player:getMainJob()][2]))
         end
     end
 end)

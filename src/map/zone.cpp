@@ -19,6 +19,14 @@
 ===========================================================================
 */
 
+#include "packets/s2c/0x057_weather.h"
+namespace
+{
+
+constexpr std::uint16_t WeatherCycle = 2160;
+
+}
+
 // TODO:
 // It is necessary to divide the CZone class into basic and heirs. Already painted: Standard, Resident, Instance and Dynamis
 // Each of these zones has special behavior
@@ -26,78 +34,60 @@
 #include "zone.h"
 
 #include "common/logging.h"
-
+#include "common/settings.h"
 #include "common/timer.h"
 #include "common/utils.h"
 #include "common/vana_time.h"
 
 #include <cstring>
+#include <filesystem>
 
 #include "battlefield.h"
-#include "common/vana_time.h"
-#include "enmity_container.h"
+#include "enums/loot_recast.h"
 #include "ipc_client.h"
 #include "latent_effect_container.h"
-#include "linkshell.h"
-#include "los/zone_los.h"
-#include "map_server.h"
+#include "map/navmesh/navmesh.h"
+#include "map/navmesh/navmesh_builder.h"
+#include "map_engine.h"
 #include "monstrosity.h"
-#include "navmesh.h"
-#include "notoriety_container.h"
+#include "nominate_manager.h"
 #include "party.h"
-#include "spell.h"
+#include "recast_container.h"
+#include "spawn_handler.h"
 #include "status_effect_container.h"
 #include "treasure_pool.h"
-#include "unitychat.h"
 #include "zone_entities.h"
 
-#include "entities/automatonentity.h"
-#include "entities/npcentity.h"
-#include "entities/petentity.h"
+#include "entities/npc_entity.h"
+#include "entities/pet_entity.h"
 
 #include "lua/luautils.h"
 
-#include "packets/action.h"
-#include "packets/char_sync.h"
-#include "packets/char_update.h"
-#include "packets/entity_update.h"
-#include "packets/inventory_assign.h"
-#include "packets/inventory_finish.h"
-#include "packets/inventory_item.h"
-#include "packets/lock_on.h"
-#include "packets/message_basic.h"
-#include "packets/server_ip.h"
-#include "packets/wide_scan.h"
-
 #include "utils/battleutils.h"
 #include "utils/charutils.h"
-#include "utils/itemutils.h"
-#include "utils/mobutils.h"
 #include "utils/moduleutils.h"
-#include "utils/petutils.h"
-#include "utils/zoneutils.h"
 
-CZone::CZone(ZONEID ZoneID, REGION_TYPE RegionID, CONTINENT_TYPE ContinentID, uint8 levelRestriction)
-: m_zoneID(ZoneID)
+#include <map/ximesh/ximesh.h>
+
+CZone::CZone(Scheduler& scheduler, MapConfig config, ZONEID ZoneID, REGION_TYPE RegionID, CONTINENT_TYPE ContinentID, uint8 levelRestriction)
+: scheduler_(scheduler)
+, config_(config)
+, navMesh_{ std::make_unique<NullNavMesh>() }
+, xiMesh_{ std::make_unique<NullXiMesh>() }
+, m_zoneID(ZoneID)
 , m_zoneType(ZONE_TYPE::UNKNOWN)
 , m_regionID(RegionID)
 , m_continentID(ContinentID)
 , m_levelRestriction(levelRestriction)
-, m_WeatherChangeTime(0)
 {
     TracyZoneScoped;
 
-    m_useNavMesh = false;
-    std::ignore  = m_useNavMesh;
-
-    ZoneTimer             = nullptr;
-    ZoneTimerTriggerAreas = nullptr;
-
     m_TreasurePool       = nullptr;
     m_BattlefieldHandler = nullptr;
-    m_Weather            = WEATHER_NONE;
-    m_zoneEntities       = new CZoneEntities(this);
+    m_zoneEntities       = new CZoneEntities(scheduler_, config_, this);
     m_CampaignHandler    = new CCampaignHandler(this);
+    m_spawnHandler       = std::make_unique<SpawnHandler>(this);
+    nominateManager_     = std::make_unique<NominateManager>(*this);
 
     // settings should load first
     LoadZoneSettings();
@@ -105,7 +95,19 @@ CZone::CZone(ZONEID ZoneID, REGION_TYPE RegionID, CONTINENT_TYPE ContinentID, ui
     LoadZoneLines();
     LoadZoneWeather();
 
-    // NOTE: Heavy resources like Navmesh are now loaded outside of the constructor in zoneutils::LoadZoneList
+    if (config_.isTestServer)
+    {
+        return;
+    }
+
+    // This must run continually, regardless of if the zone is awake
+    spawnHandlerTimerToken_ = scheduler.intervalOnMainThread(
+        kSpawnHandlerInterval,
+        [this]() -> Task<void>
+        {
+            this->spawnHandler().Tick(timer::now());
+            co_return;
+        });
 }
 
 CZone::~CZone()
@@ -130,7 +132,7 @@ CZone::~CZone()
     m_zoneLineList.clear();
 }
 
-ZONEID CZone::GetID()
+auto CZone::GetID() const -> ZONEID
 {
     return m_zoneID;
 }
@@ -170,14 +172,34 @@ uint16 CZone::GetTax() const
     return m_tax;
 }
 
-WEATHER CZone::GetWeather()
+auto CZone::weather() -> WeatherContainer&
 {
-    return m_Weather;
+    return weather_;
 }
 
-uint32 CZone::GetWeatherChangeTime() const
+auto CZone::weather() const -> const WeatherContainer&
 {
-    return m_WeatherChangeTime;
+    return weather_;
+}
+
+auto CZone::spawnHandler() const -> SpawnHandler&
+{
+    return *m_spawnHandler;
+}
+
+auto CZone::nominateManager() const -> NominateManager&
+{
+    return *nominateManager_;
+}
+
+auto CZone::campaignHandler() const -> CCampaignHandler*
+{
+    return m_CampaignHandler;
+}
+
+auto CZone::battlefieldHandler() const -> CBattlefieldHandler*
+{
+    return m_BattlefieldHandler;
 }
 
 const std::string& CZone::getName()
@@ -232,7 +254,7 @@ void CZone::SetBackgroundMusicNight(uint16 music)
  * with other methods that perform pattern matching.
  * E.g: %anto% matches Shantotto and Canto-anto
  */
-QueryByNameResult_t const& CZone::queryEntitiesByName(std::string const& pattern)
+const QueryByNameResult_t& CZone::queryEntitiesByName(const std::string& pattern)
 {
     TracyZoneScoped;
 
@@ -251,23 +273,23 @@ QueryByNameResult_t const& CZone::queryEntitiesByName(std::string const& pattern
     std::vector<CBaseEntity*> entities;
 
     // TODO: Make work for instances
-    // clang-format off
-    ForEachNpc([&](CNpcEntity* PNpc)
-    {
-        if (matches(PNpc->getName(), pattern))
+    ForEachNpc(
+        [&](CNpcEntity* PNpc)
         {
-            entities.emplace_back(PNpc);
-        }
-    });
+            if (matches(PNpc->getName(), pattern))
+            {
+                entities.emplace_back(PNpc);
+            }
+        });
 
-    ForEachMob([&](CMobEntity* PMob)
-    {
-        if (matches(PMob->getName(), pattern))
+    ForEachMob(
+        [&](CMobEntity* PMob)
         {
-            entities.emplace_back(PMob);
-        }
-     });
-    // clang-format on
+            if (matches(PMob->getName(), pattern))
+            {
+                entities.emplace_back(PMob);
+            }
+        });
 
     m_queryByNameResults[pattern] = std::move(entities);
     return m_queryByNameResults[pattern];
@@ -275,17 +297,22 @@ QueryByNameResult_t const& CZone::queryEntitiesByName(std::string const& pattern
 
 uint32 CZone::GetLocalVar(const char* var)
 {
-    return m_LocalVars[var];
+    return localVars_[var];
+}
+
+std::unordered_map<std::string, uint32>& CZone::GetLocalVars()
+{
+    return localVars_;
 }
 
 void CZone::SetLocalVar(const char* var, uint32 val)
 {
-    m_LocalVars[var] = val;
+    localVars_[var] = val;
 }
 
 void CZone::ResetLocalVars()
 {
-    m_LocalVars.clear();
+    localVars_.clear();
 }
 
 bool CZone::CanUseMisc(uint16 misc) const
@@ -293,16 +320,11 @@ bool CZone::CanUseMisc(uint16 misc) const
     return (m_miscMask & misc) == misc;
 }
 
-bool CZone::IsWeatherStatic() const
-{
-    return m_WeatherVector.empty() || m_WeatherVector.size() == 1;
-}
-
 zoneLine_t* CZone::GetZoneLine(uint32 zoneLineID)
 {
     for (const auto& zoneLine : m_zoneLineList)
     {
-        if (zoneLine->m_zoneLineID == zoneLineID)
+        if (zoneLine->zoneLineId == zoneLineID)
         {
             return zoneLine;
         }
@@ -310,29 +332,53 @@ zoneLine_t* CZone::GetZoneLine(uint32 zoneLineID)
     return nullptr;
 }
 
+// Spawns players across 8 fixed slots along the target zoneline area.
+// Spacing is calculated from the documented invisible box representing the zoneline
+auto zoneLine_t::nextSpawnPosition() -> position_t
+{
+    const float scale    = std::max(destinationScaleX, destinationScaleZ); // Spawn area length
+    const float spacing  = (scale - 1.0f) / 8.0f;                          // Distance between slots
+    const float offset   = (m_spawnSlot - 4) * spacing;                    // Offset from center (slot 4)
+    const float rotation = rotationToRadian(destinationPos.rotation);      // Direction to apply offset
+
+    m_spawnSlot = (m_spawnSlot + 1) % 8;
+
+    return {
+        destinationPos.x + offset * std::sin(rotation),
+        destinationPos.y,
+        destinationPos.z + offset * std::cos(rotation),
+        0,
+        destinationPos.rotation,
+    };
+}
+
 void CZone::LoadZoneLines()
 {
     TracyZoneScoped;
 
-    static const char fmtQuery[] = "SELECT zoneline, tozone, tox, toy, toz, rotation FROM zonelines WHERE fromzone = %u";
-
-    int32 ret = _sql->Query(fmtQuery, m_zoneID);
-
-    if (ret != SQL_ERROR && _sql->NumRows() != 0)
+    const auto rset = db::preparedStmt("SELECT zonelineid, from_zone, from_pos_x, from_pos_y, from_pos_z, "
+                                       "to_zone, to_pos_x, to_pos_y, to_pos_z, to_scale_x, to_scale_z, to_rotation "
+                                       "FROM zonelines "
+                                       "WHERE from_zone = ?",
+                                       m_zoneID);
+    FOR_DB_MULTIPLE_RESULTS(rset)
     {
-        while (_sql->NextRow() == SQL_SUCCESS)
-        {
-            zoneLine_t* zl = new zoneLine_t;
+        auto* zl = new zoneLine_t;
 
-            zl->m_zoneLineID     = (uint32)_sql->GetIntData(0);
-            zl->m_toZone         = (uint16)_sql->GetIntData(1);
-            zl->m_toPos.x        = _sql->GetFloatData(2);
-            zl->m_toPos.y        = _sql->GetFloatData(3);
-            zl->m_toPos.z        = _sql->GetFloatData(4);
-            zl->m_toPos.rotation = (uint8)_sql->GetIntData(5);
+        zl->zoneLineId              = rset->get<uint32>("zonelineid");
+        zl->originZoneId            = rset->get<ZONEID>("from_zone");
+        zl->originPos.x             = rset->get<float>("from_pos_x");
+        zl->originPos.y             = rset->get<float>("from_pos_y");
+        zl->originPos.z             = rset->get<float>("from_pos_z");
+        zl->destinationZoneId       = rset->get<ZONEID>("to_zone");
+        zl->destinationPos.x        = rset->get<float>("to_pos_x");
+        zl->destinationPos.y        = rset->get<float>("to_pos_y");
+        zl->destinationPos.z        = rset->get<float>("to_pos_z");
+        zl->destinationPos.rotation = radianToRotation(rset->get<float>("to_rotation"));
+        zl->destinationScaleX       = rset->get<float>("to_scale_x");
+        zl->destinationScaleZ       = rset->get<float>("to_scale_z");
 
-            m_zoneLineList.emplace_back(zl);
-        }
+        m_zoneLineList.emplace_back(zl);
     }
 }
 
@@ -354,27 +400,25 @@ void CZone::LoadZoneWeather()
 {
     TracyZoneScoped;
 
-    static const char* Query = "SELECT weather FROM zone_weather WHERE zone = %u";
-
-    int32 ret = _sql->Query(Query, m_zoneID);
-    if (ret != SQL_ERROR && _sql->NumRows() != 0)
+    const auto rset = db::preparedStmt("SELECT weather "
+                                       "FROM zone_weather "
+                                       "WHERE zone = ? LIMIT 1",
+                                       m_zoneID);
+    FOR_DB_SINGLE_RESULT(rset)
     {
-        _sql->NextRow();
-        auto* weatherBlob = reinterpret_cast<uint16*>(_sql->GetData(0));
-        for (uint16 i = 0; i < WEATHER_CYCLE; i++)
+        uint16_t weatherBlob[WeatherCycle]{};
+
+        db::extractFromBlob(rset, "weather", weatherBlob);
+        for (uint16 i = 0; i < WeatherCycle; i++)
         {
             if (weatherBlob[i])
             {
-                uint8 w_normal = static_cast<uint8>(weatherBlob[i] >> 10);
-                uint8 w_common = static_cast<uint8>((weatherBlob[i] >> 5) & 0x1F);
-                uint8 w_rare   = static_cast<uint8>(weatherBlob[i] & 0x1F);
-                m_WeatherVector.insert(std::make_pair(i, zoneWeather_t(w_normal, w_common, w_rare)));
+                const auto w_normal = static_cast<Weather>(weatherBlob[i] >> 10);
+                const auto w_common = static_cast<Weather>((weatherBlob[i] >> 5) & 0x1F);
+                const auto w_rare   = static_cast<Weather>(weatherBlob[i] & 0x1F);
+                weather_.addEntry(i, ZoneWeather(w_normal, w_common, w_rare));
             }
         }
-    }
-    else
-    {
-        ShowCritical("CZone::LoadZoneWeather: Cannot load zone weather (%u). Ensure zone_weather.sql has been imported!", m_zoneID);
     }
 }
 
@@ -382,95 +426,167 @@ void CZone::LoadZoneSettings()
 {
     TracyZoneScoped;
 
-    static const char* Query = "SELECT "
-                               "zone.name,"
-                               "zone.zoneip,"
-                               "zone.zoneport,"
-                               "zone.music_day,"
-                               "zone.music_night,"
-                               "zone.battlesolo,"
-                               "zone.battlemulti,"
-                               "zone.tax,"
-                               "zone.misc,"
-                               "zone.zonetype,"
-                               "bcnm.name "
-                               "FROM zone_settings AS zone "
-                               "LEFT JOIN bcnm_records AS bcnm "
-                               "USING (zoneid) "
-                               "WHERE zoneid = %u "
-                               "LIMIT 1";
-
-    if (_sql->Query(Query, m_zoneID) != SQL_ERROR && _sql->NumRows() != 0 && _sql->NextRow() == SQL_SUCCESS)
+    const auto rset = db::preparedStmt("SELECT "
+                                       "zone.name,"
+                                       "zone.zoneip,"
+                                       "zone.zoneport,"
+                                       "zone.music_day,"
+                                       "zone.music_night,"
+                                       "zone.battlesolo,"
+                                       "zone.battlemulti,"
+                                       "zone.tax,"
+                                       "zone.misc,"
+                                       "zone.zonetype,"
+                                       "bcnm.name AS bcnmname "
+                                       "FROM zone_settings AS zone "
+                                       "LEFT JOIN bcnm_records AS bcnm "
+                                       "USING (zoneid) "
+                                       "WHERE zoneid = ? "
+                                       "LIMIT 1",
+                                       m_zoneID);
+    FOR_DB_SINGLE_RESULT(rset)
     {
-        m_zoneName.insert(0, (const char*)_sql->GetData(0));
-        m_zoneIP = str2ip((const char*)_sql->GetData(1));
+        m_zoneName.insert(0, rset->get<std::string>("name"));
+        m_zoneIP   = str2ip(rset->get<std::string>("zoneip"));
+        m_zonePort = rset->get<uint16>("zoneport");
 
-        m_zonePort              = (uint16)_sql->GetUIntData(2);
-        m_zoneMusic.m_songDay   = (uint8)_sql->GetUIntData(3);           // background music (day)
-        m_zoneMusic.m_songNight = (uint8)_sql->GetUIntData(4);           // background music (night)
-        m_zoneMusic.m_bSongS    = (uint8)_sql->GetUIntData(5);           // solo battle music
-        m_zoneMusic.m_bSongM    = (uint8)_sql->GetUIntData(6);           // party battle music
-        m_tax                   = (uint16)(_sql->GetFloatData(7) * 100); // tax for bazaar
-        m_miscMask              = (uint16)_sql->GetUIntData(8);
+        m_zoneMusic.m_songDay   = rset->get<uint8>("music_day");
+        m_zoneMusic.m_songNight = rset->get<uint8>("music_night");
+        m_zoneMusic.m_bSongS    = rset->get<uint8>("battlesolo");
+        m_zoneMusic.m_bSongM    = rset->get<uint8>("battlemulti");
+        m_tax                   = static_cast<uint16>(rset->get<float>("tax") * 100); // tax for bazaar
+        m_miscMask              = rset->get<uint16>("misc");
+        m_zoneType              = rset->get<ZONE_TYPE>("zonetype");
 
-        m_zoneType = static_cast<ZONE_TYPE>(_sql->GetUIntData(9));
-
-        if (_sql->GetData(10) != nullptr) // bcnmid cannot be used now, because they start from scratch
+        if (rset->getOrDefault<std::string>("bcnmname", "") != "") // bcnmid cannot be used now, because they start from scratch
         {
             m_BattlefieldHandler = new CBattlefieldHandler(this);
         }
+
         if (m_miscMask & MISC_TREASURE)
         {
             m_TreasurePool = new CTreasurePool(TreasurePoolType::Zone);
         }
+
         if (m_CampaignHandler && m_CampaignHandler->m_PZone == nullptr)
         {
             destroy(m_CampaignHandler);
         }
     }
-    else
-    {
-        ShowCritical("CZone::LoadZoneSettings: Cannot load zone settings (%u)", m_zoneID);
-    }
 }
 
-void CZone::LoadNavMesh()
+auto CZone::LoadNavMesh() -> Task<void>
+{
+    auto       navMesh = std::make_unique<CNavMesh>(static_cast<uint16>(GetID()));
+    const auto file    = fmt::format("navmeshes/{}.nav", getName());
+
+    if (!config_.rebuildNavmeshes && navMesh->load(file))
+    {
+        navMesh_ = std::move(navMesh);
+        co_return;
+    }
+
+    NavMeshBuilder builder(*xiMesh_);
+
+    auto* dtNavMesh = co_await builder.buildAsync(scheduler_, getName(), static_cast<uint16>(GetID()), NavMeshConfig{});
+    if (dtNavMesh && navMesh->installNavMesh(dtNavMesh))
+    {
+        navMesh->save(file);
+        navMesh_ = std::move(navMesh);
+        co_return;
+    }
+
+    DebugNavmesh("CZone::LoadNavMesh: Build failed for zone (%s)", getName().c_str());
+}
+
+void CZone::RebuildNavMesh(const NavMeshConfig& config)
+{
+    const auto  zoneName  = getName();
+    const auto  zoneID    = static_cast<uint16>(GetID());
+    const auto* xiMeshPtr = xiMesh_.get();
+
+    scheduler_.postToMainThread(
+        [this, zoneName, zoneID, config, xiMeshPtr]() -> Task<void>
+        {
+            NavMeshBuilder builder(*xiMeshPtr);
+
+            auto* dtNavMesh = co_await builder.buildAsync(scheduler_, zoneName, zoneID, config);
+            auto  navMesh   = std::make_unique<CNavMesh>(zoneID);
+            if (dtNavMesh && navMesh->installNavMesh(dtNavMesh))
+            {
+                navMesh->save(fmt::format("navmeshes/{}.nav", zoneName));
+                navMesh_ = std::move(navMesh);
+            }
+        });
+}
+
+auto CZone::navMesh() const -> INavMesh*
+{
+    return navMesh_.get();
+}
+
+auto CZone::xiMesh() const -> IXiMesh*
+{
+    return xiMesh_.get();
+}
+
+void CZone::LoadXiMesh()
 {
     TracyZoneScoped;
 
-    if (m_navMesh == nullptr)
+    // TODO: Align ximesh filenames with zone_settings names so this isn't needed.
+    auto meshName = std::string(getName());
+
+    // Rala_Waterways_U -> Rala_Waterways_[U]
+    // Yorcia_Weald_U -> Yorcia_Weald_[U]
+    // Cirdas_Caverns_U -> Cirdas_Caverns_[U]
+    if (meshName.size() >= 2 && meshName.substr(meshName.size() - 2) == "_U")
     {
-        m_navMesh = std::make_unique<CNavMesh>(static_cast<uint16>(GetID()));
+        meshName.replace(meshName.size() - 2, 2, "_[U]");
     }
 
-    char file[255];
-    std::memset(file, 0, sizeof(file));
-    snprintf(file, sizeof(file), "navmeshes/%s.nav", getName().c_str());
-
-    if (!m_navMesh->load(file))
+    // Escha_ZiTah -> Escha-ZiTah
+    // Escha_RuAun -> Escha-RuAun
+    if (meshName.starts_with("Escha_"))
     {
-        DebugNavmesh("CZone::LoadNavMesh: Cannot load navmesh file (%s)", file);
-        m_navMesh = nullptr;
-    }
-}
-
-void CZone::LoadZoneLos()
-{
-    TracyZoneScoped;
-
-    if (GetTypeMask() & ZONE_TYPE::CITY || (m_miscMask & MISC_LOS_OFF))
-    {
-        // Skip cities and zones with line of sight turned off
-        return;
+        meshName.replace(5, 1, "-");
     }
 
-    if (lineOfSight)
+    // Desuetia_Empyreal_Paradox -> Desuetia-Empyreal_Paradox
+    if (meshName.starts_with("Desuetia_"))
     {
-        // Clean up previous object if one exists.
-        lineOfSight = nullptr;
+        meshName.replace(8, 1, "-");
     }
 
-    lineOfSight = ZoneLos::Load((uint16)GetID(), fmt::sprintf("losmeshes/%s.obj", getName()));
+    // Ship_bound_for_Selbina_Pirates -> Ship_bound_for_Selbina_ID-227, Ship_bound_for_Mhaura_Pirates -> Ship_bound_for_Mhaura_ID-228
+    if (meshName == "Ship_bound_for_Selbina_Pirates")
+    {
+        meshName = "Ship_bound_for_Selbina_ID-227";
+    }
+    else if (meshName == "Ship_bound_for_Mhaura_Pirates")
+    {
+        meshName = "Ship_bound_for_Mhaura_ID-228";
+    }
+
+    // Maquette_Abdhaljs-Legion_A -> Maquette_Abdhaljs-LegionA
+    // Maquette_Abdhaljs-Legion_B -> Maquette_Abdhaljs-LegionB
+    if (meshName.starts_with("Maquette_Abdhaljs-Legion_"))
+    {
+        meshName.erase(meshName.size() - 2, 1);
+    }
+
+    const auto file = fmt::format("ximeshes/{}.ximesh", meshName);
+    if (std::filesystem::exists(file))
+    {
+        try
+        {
+            xiMesh_ = std::make_unique<XiMesh>(file);
+        }
+        catch (const std::exception& e)
+        {
+            ShowErrorFmt("CZone::LoadXiMesh: Failed to load '{}': {}", file, e.what());
+        }
+    }
 }
 
 void CZone::InsertMOB(CBaseEntity* PMob)
@@ -515,148 +631,138 @@ void CZone::FindPartyForMob(CBaseEntity* PEntity)
     m_zoneEntities->FindPartyForMob(PEntity);
 }
 
-void CZone::TransportDepart(uint16 boundary, uint16 zone)
+void CZone::onEntityMoved(CBaseEntity* PEntity)
 {
-    m_zoneEntities->TransportDepart(boundary, zone);
+    m_zoneEntities->onEntityMoved(PEntity);
+}
+
+void CZone::TransportDepart(uint16 boundary, uint16 prevZoneId, uint16 transportId)
+{
+    m_zoneEntities->TransportDepart(boundary, prevZoneId, transportId);
 }
 
 void CZone::updateCharLevelRestriction(CCharEntity* PChar)
 {
     TracyZoneScoped;
 
-    if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_LEVEL_RESTRICTION))
+    if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::LevelRestriction))
     {
         // If the level restriction is already the same then no need to change it
-        CStatusEffect* statusEffect = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_LEVEL_RESTRICTION);
+        CStatusEffect* statusEffect = PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::LevelRestriction);
         if (statusEffect == nullptr || statusEffect->GetPower() == m_levelRestriction)
         {
             return;
         }
 
-        PChar->StatusEffectContainer->DelStatusEffect(EFFECT_LEVEL_RESTRICTION);
+        PChar->StatusEffectContainer->DelStatusEffect(xi::StatusEffect::LevelRestriction);
     }
 
     if (m_levelRestriction != 0)
     {
         // remove buffs in level cap zones as well (such as riverne sites)
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_DISPELABLE, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_ERASABLE, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_ATTACK, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_ON_ZONE, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_SONG, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_ROLL, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_SYNTH_SUPPORT, true);
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_BLOODPACT, true);
-        PChar->StatusEffectContainer->AddStatusEffect(new CStatusEffect(EFFECT_LEVEL_RESTRICTION, EFFECT_LEVEL_RESTRICTION, m_levelRestriction, 0, 0));
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Dispelable, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Erasable, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Attack, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::OnZone, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Song, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Roll, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::SynthSupport, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Bloodpact, EffectNotice::Silent);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::Reraise);
+        PChar->StatusEffectContainer->AddStatusEffect(xi::StatusEffect::LevelRestriction, static_cast<uint16>(xi::StatusEffect::LevelRestriction), m_levelRestriction, 0s, 0s);
     }
 }
 
-void CZone::SetWeather(WEATHER weather)
+void CZone::SetWeather(const Weather weather)
 {
     TracyZoneScoped;
 
-    if (weather >= MAX_WEATHER_ID)
+    if (!magic_enum::enum_contains<Weather>(weather))
     {
-        ShowWarning("Weather value (%d) exceeds MAX_WEATHER_ID.", weather);
+        ShowWarningFmt("Weather value ({}) invalid.", static_cast<uint16_t>(weather));
         return;
     }
 
-    if (m_Weather == weather)
+    if (weather_.current() == weather)
     {
         return;
     }
 
     m_zoneEntities->WeatherChange(weather);
 
-    m_Weather           = weather;
-    m_WeatherChangeTime = CVanaTime::getInstance()->getVanaTime();
+    const uint32 changeTime = earth_time::vanadiel_timestamp();
+    weather_.set(weather, changeTime);
 
-    m_zoneEntities->PushPacket(nullptr, CHAR_INZONE, std::make_unique<CWeatherPacket>(m_WeatherChangeTime, m_Weather, xirand::GetRandomNumber(4, 28)));
+    m_zoneEntities->PushPacket(nullptr, CHAR_INZONE, std::make_unique<GP_SERV_COMMAND_WEATHER>(changeTime, weather, xirand::GetRandomNumber(4, 28)));
 }
 
 void CZone::UpdateWeather()
 {
     TracyZoneScoped;
 
-    uint32 CurrentVanaDate   = CVanaTime::getInstance()->getDate();                                  // Current Vanadiel timestamp in minutes
-    uint32 StartFogVanaDate  = (CurrentVanaDate - (CurrentVanaDate % VTIME_DAY)) + (VTIME_HOUR * 2); // Vanadiel timestamp of 2 AM in minutes
-    uint32 EndFogVanaDate    = StartFogVanaDate + (VTIME_HOUR * 5);                                  // Vanadiel timestamp of 7 AM in minutes
-    uint32 WeatherNextUpdate = 0;
-    uint32 WeatherDay        = 0;
-    uint8  WeatherChance     = 0;
+    vanadiel_time::time_point CurrentVanaDate   = vanadiel_time::now(); // Current Vanadiel time
+    vanadiel_time::time_point nextVanaMidnight  = vanadiel_time::get_next_midnight(CurrentVanaDate);
+    vanadiel_time::time_point StartFogVanaDate  = nextVanaMidnight - xi::vanadiel_clock::days(1) + xi::vanadiel_clock::hours(2); // Vanadiel timestamp of 2 AM in minutes
+    vanadiel_time::time_point EndFogVanaDate    = StartFogVanaDate + xi::vanadiel_clock::hours(5);                               // Vanadiel timestamp of 7 AM in minutes
+    vanadiel_time::duration   WeatherNextUpdate = 0s;
+    uint32                    WeatherDay        = 0;
+    uint8                     WeatherChance     = 0;
 
     // Random time between 3 minutes and 30 minutes for the next weather change
-    WeatherNextUpdate = (xirand::GetRandomNumber(180, 1801));
-
-    // Find the timestamp since the start of vanadiel
-    WeatherDay = CVanaTime::getInstance()->getVanaTime();
+    WeatherNextUpdate = std::chrono::seconds(xirand::GetRandomNumber(180, 1801));
 
     // Calculate what day we are on since the start of vanadiel time
-    // 1 Vana'diel Day = 57 minutes 36 seconds or 3456 seconds
-    WeatherDay = WeatherDay / 3456;
+    WeatherDay = vanadiel_time::count_days(CurrentVanaDate.time_since_epoch());
 
     // The weather starts over again every 2160 days
-    WeatherDay = WeatherDay % WEATHER_CYCLE;
+    WeatherDay = WeatherDay % WeatherCycle;
 
     // Get a random number to determine which weather effect we will use
     WeatherChance = xirand::GetRandomNumber(100);
 
-    zoneWeather_t&& weatherType = zoneWeather_t(0, 0, 0);
+    const ZoneWeather weatherType = weather_.entryForDay(static_cast<uint16>(WeatherDay));
 
-    for (auto& weather : m_WeatherVector)
-    {
-        if (weather.first > WeatherDay)
-        {
-            break;
-        }
-        weatherType = weather.second;
-    }
-
-    uint8 Weather = 0;
+    auto selectedWeather = Weather::None;
 
     // 15% chance for rare weather, 35% chance for common weather, 50% chance for normal weather
     // * Percentages were generated from a 6 hour sample and rounded down to closest multiple of 5*
     if (WeatherChance < 15) // 15% chance to have the weather_rare
     {
-        Weather = weatherType.rare;
+        selectedWeather = weatherType.rare;
     }
     else if (WeatherChance < 50) // 35% chance to have weather_common
     {
-        Weather = weatherType.common;
+        selectedWeather = weatherType.common;
     }
     else
     {
-        Weather = weatherType.normal;
+        selectedWeather = weatherType.normal;
     }
 
     // This check is incorrect, fog is not simply a time of day, though it may consistently happen in SOME zones
     // (Al'Taieu likely has it every morning, while Atohwa Chasm can have it at random any time of day)
     if ((CurrentVanaDate >= StartFogVanaDate) &&
         (CurrentVanaDate < EndFogVanaDate) &&
-        (Weather < WEATHER_HOT_SPELL) &&
+        (selectedWeather < Weather::HotSpell) &&
         !(GetTypeMask() & ZONE_TYPE::CITY))
     {
-        Weather = WEATHER_FOG;
+        selectedWeather = Weather::Fog;
         // Force the weather to change by 7 am
-        //  2.4 vanadiel minutes = 1 earth second
-        WeatherNextUpdate = (uint32)((EndFogVanaDate - CurrentVanaDate) * 2.4);
+        WeatherNextUpdate = EndFogVanaDate - CurrentVanaDate;
     }
 
-    SetWeather((WEATHER)Weather);
-    luautils::OnZoneWeatherChange(GetID(), Weather);
+    SetWeather(selectedWeather);
+    luautils::OnZoneWeatherChange(GetID(), selectedWeather);
 
-    // clang-format off
-    CTaskManager::getInstance()->AddTask("zone_update_weather", server_clock::now() + std::chrono::seconds(WeatherNextUpdate), this, CTaskManager::TASK_ONCE, 1s,
-    [](time_point tick, CTaskManager::CTask* PTask)
-    {
-        CZone* PZone = std::any_cast<CZone*>(PTask->m_data);
-        if (!PZone->IsWeatherStatic())
+    scheduler_.postToMainThread(
+        [this, duration = std::chrono::duration_cast<earth_time::duration>(WeatherNextUpdate)]() -> Task<void>
         {
-            PZone->UpdateWeather();
-        }
-        return 0;
-    });
-    // clang-format on
+            co_await scheduler_.yieldFor(duration);
+            if (!this->weather().isStatic())
+            {
+                this->UpdateWeather();
+            }
+        });
 }
 
 bool CZone::CheckMobsPathedBack()
@@ -664,7 +770,7 @@ bool CZone::CheckMobsPathedBack()
     bool allMobsHomeAndHealed = true;
     if (m_zoneEntities && m_zoneEntities->GetMobList().size() > 0)
     {
-        EntityList_t mobListMap = m_zoneEntities->GetMobList();
+        const auto& mobListMap = m_zoneEntities->GetMobList();
         for (const auto& pair : mobListMap)
         {
             CMobEntity* mob = dynamic_cast<CMobEntity*>(pair.second);
@@ -696,7 +802,7 @@ void CZone::DecreaseZoneCounter(CCharEntity* PChar)
 
     if (m_zoneEntities->CharListEmpty())
     {
-        m_timeZoneEmpty = server_clock::now();
+        m_timeZoneEmpty = timer::now();
     }
     else
     {
@@ -734,12 +840,12 @@ void CZone::IncreaseZoneCounter(CCharEntity* PChar)
 
     m_zoneEntities->InsertPC(PChar);
 
-    if (!ZoneTimer && !m_zoneEntities->CharListEmpty())
+    if (!zoneTimerToken_.has_value() && !m_zoneEntities->CharListEmpty())
     {
         createZoneTimers();
     }
 
-    PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_ON_ZONE_PATHOS, true);
+    PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::OnZonePathos, EffectNotice::Silent);
 
     CharZoneIn(PChar);
 }
@@ -790,7 +896,7 @@ CBaseEntity* CZone::GetEntity(uint16 targid, uint8 filter)
  *                                                                       *
  ************************************************************************/
 
-void CZone::TOTDChange(TIMETYPE TOTD)
+void CZone::TOTDChange(vanadiel_time::TOTD TOTD)
 {
     TracyZoneScoped;
 
@@ -806,7 +912,7 @@ void CZone::SavePlayTime()
     m_zoneEntities->SavePlayTime();
 }
 
-CCharEntity* CZone::GetCharByName(std::string const& name)
+CCharEntity* CZone::GetCharByName(const std::string& name)
 {
     return m_zoneEntities->GetCharByName(name);
 }
@@ -844,105 +950,104 @@ void CZone::WideScan(CCharEntity* PChar, uint16 radius)
  *                                                                       *
  ************************************************************************/
 
-void CZone::ZoneServer(time_point tick)
+auto CZone::ZoneServer(timer::time_point tick) -> Task<void>
 {
     TracyZoneScoped;
 
-    m_zoneEntities->ZoneServer(tick);
+    co_await m_zoneEntities->ZoneServer(tick);
 
     if (m_BattlefieldHandler != nullptr)
     {
         m_BattlefieldHandler->HandleBattlefields(tick);
     }
 
-    if (ZoneTimer && m_zoneEntities->CharListEmpty() && m_timeZoneEmpty + 5s < server_clock::now() && CheckMobsPathedBack())
+    if (zoneTimerToken_.has_value() && m_zoneEntities->CharListEmpty() && m_timeZoneEmpty + 5s < timer::now() && CheckMobsPathedBack())
     {
-        ZoneTimer->m_type = CTaskManager::TASK_REMOVE;
-        ZoneTimer         = nullptr;
-
-        ZoneTimerTriggerAreas->m_type = CTaskManager::TASK_REMOVE;
-        ZoneTimerTriggerAreas         = nullptr;
+        zoneTimerToken_.reset();
+        zoneTimerTriggerAreasToken_.reset();
     }
+
+    co_return;
 }
 
-void CZone::ForEachChar(std::function<void(CCharEntity*)> const& func)
+void CZone::ForEachChar(const std::function<void(CCharEntity*)>& func)
 {
     TracyZoneScoped;
 
     m_zoneEntities->ForEachChar(func);
 }
 
-void CZone::ForEachCharInstance(CBaseEntity* PEntity, std::function<void(CCharEntity*)> const& func)
+void CZone::ForEachCharInstance(CBaseEntity* PEntity, const std::function<void(CCharEntity*)>& func)
 {
     TracyZoneScoped;
 
     ForEachChar(func);
 }
 
-void CZone::ForEachMob(std::function<void(CMobEntity*)> const& func)
+void CZone::ForEachMob(const std::function<void(CMobEntity*)>& func)
 {
     TracyZoneScoped;
 
     m_zoneEntities->ForEachMob(func);
 }
 
-void CZone::ForEachMobInstance(CBaseEntity* PEntity, std::function<void(CMobEntity*)> const& func)
+void CZone::ForEachMobInstance(CBaseEntity* PEntity, const std::function<void(CMobEntity*)>& func)
 {
     TracyZoneScoped;
 
     ForEachMob(func);
 }
 
-void CZone::ForEachNpc(std::function<void(CNpcEntity*)> const& func)
+void CZone::ForEachNpc(const std::function<void(CNpcEntity*)>& func)
 {
     TracyZoneScoped;
 
     m_zoneEntities->ForEachNpc(func);
 }
 
-void CZone::ForEachNpcInstance(CBaseEntity* PEntity, std::function<void(CNpcEntity*)> const& func)
+void CZone::ForEachNpcInstance(CBaseEntity* PEntity, const std::function<void(CNpcEntity*)>& func)
 {
     TracyZoneScoped;
 
     ForEachNpc(func);
 }
 
-void CZone::ForEachTrust(std::function<void(CTrustEntity*)> const& func)
+void CZone::ForEachTrust(const std::function<void(CTrustEntity*)>& func)
 {
     TracyZoneScoped;
 
     m_zoneEntities->ForEachTrust(func);
 }
 
-void CZone::ForEachTrustInstance(CBaseEntity* PEntity, std::function<void(CTrustEntity*)> const& func)
+void CZone::ForEachTrustInstance(CBaseEntity* PEntity, const std::function<void(CTrustEntity*)>& func)
 {
     TracyZoneScoped;
 
     ForEachTrust(func);
 }
 
-void CZone::ForEachPet(std::function<void(CPetEntity*)> const& func)
+void CZone::ForEachPet(const std::function<void(CPetEntity*)>& func)
 {
     TracyZoneScoped;
 
     m_zoneEntities->ForEachPet(func);
 }
 
-void CZone::ForEachPetInstance(CBaseEntity* PEntity, std::function<void(CPetEntity*)> const& func)
+void CZone::ForEachPetInstance(CBaseEntity* PEntity, const std::function<void(CPetEntity*)>& func)
 {
     TracyZoneScoped;
 
     ForEachPet(func);
 }
 
-void CZone::ForEachAlly(std::function<void(CMobEntity*)> const& func)
+void CZone::ForEachAlly(const std::function<void(CMobEntity*)>& func)
 {
     TracyZoneScoped;
 
     m_zoneEntities->ForEachAlly(func);
 }
 
-void CZone::ForEachAllyInstance(CBaseEntity* PEntity, std::function<void(CMobEntity*)> const& func)
+void CZone::ForEachAllyInstance(CBaseEntity* PEntity, const std::function<void(CMobEntity*)>& func)
 {
     TracyZoneScoped;
 
@@ -953,23 +1058,25 @@ void CZone::createZoneTimers()
 {
     TracyZoneScoped;
 
-    // clang-format off
-    ZoneTimer = CTaskManager::getInstance()->AddTask(m_zoneName, server_clock::now(), this, CTaskManager::TASK_INTERVAL, kLogicUpdateInterval,
-    [](time_point tick, CTaskManager::CTask* PTask)
+    // We'll manually tick on while testing, don't install the timers
+    if (config_.isTestServer)
     {
-        CZone* PZone = std::any_cast<CZone*>(PTask->m_data);
-        PZone->ZoneServer(tick);
-        return 0;
-    });
+        return;
+    }
 
-    ZoneTimerTriggerAreas = CTaskManager::getInstance()->AddTask(m_zoneName + "TriggerAreas", server_clock::now(), this, CTaskManager::TASK_INTERVAL, kTriggerAreaInterval,
-    [](time_point tick, CTaskManager::CTask* PTask)
-    {
-        CZone* PZone = std::any_cast<CZone*>(PTask->m_data);
-        PZone->CheckTriggerAreas();
-        return 0;
-    });
-    // clang-format on
+    zoneTimerToken_ = scheduler_.intervalOnMainThread(
+        kLogicUpdateInterval,
+        [this]() -> Task<void>
+        {
+            co_await this->ZoneServer(timer::now());
+        });
+
+    zoneTimerTriggerAreasToken_ = scheduler_.intervalOnMainThread(
+        kTriggerAreaInterval,
+        [this]() -> Task<void>
+        {
+            co_await this->CheckTriggerAreas();
+        });
 }
 
 void CZone::CharZoneIn(CCharEntity* PChar)
@@ -977,24 +1084,23 @@ void CZone::CharZoneIn(CCharEntity* PChar)
     TracyZoneScoped;
 
     PChar->loc.zone        = this;
-    PChar->loc.zoning      = false;
     PChar->loc.destination = 0;
     PChar->clearTriggerAreas();
 
     if (PChar->isMounted() && !CanUseMisc(MISC_MOUNT))
     {
         PChar->animation = ANIMATION_NONE;
-        PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_MOUNTED);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::Mounted);
     }
 
-    if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_COSTUME))
+    if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Costume))
     {
-        PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_COSTUME);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::Costume);
     }
 
-    if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_ILLUSION))
+    if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Illusion))
     {
-        PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_ILLUSION);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::Illusion);
     }
 
     PChar->ReloadPartyInc();
@@ -1027,11 +1133,11 @@ void CZone::CharZoneIn(CCharEntity* PChar)
     if (m_BattlefieldHandler)
     {
         auto* PBattlefield = m_BattlefieldHandler->GetBattlefield(PChar, true);
-        if (PBattlefield != nullptr && PChar->StatusEffectContainer->HasStatusEffectByFlag(EFFECTFLAG_CONFRONTATION))
+        if (PBattlefield != nullptr && PChar->StatusEffectContainer->HasStatusEffectByFlag(xi::StatusEffectFlag::Confrontation))
         {
             PBattlefield->InsertEntity(PChar, CBattlefield::hasPlayerEntered(PChar));
         }
-        else if (PChar->StatusEffectContainer->HasStatusEffectByFlag(EFFECTFLAG_CONFRONTATION))
+        else if (PChar->StatusEffectContainer->HasStatusEffectByFlag(xi::StatusEffectFlag::Confrontation))
         {
             // Player is in a zone with a battlefield but they are not part of one.
             if (CBattlefield::hasPlayerEntered(PChar))
@@ -1043,31 +1149,31 @@ void CZone::CharZoneIn(CCharEntity* PChar)
             else
             {
                 // Is not inside of a battlefield arena so remove the battlefield effect
-                PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+                PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
                 updateCharLevelRestriction(PChar);
                 if (PChar->PPet)
                 {
-                    PChar->PPet->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+                    PChar->PPet->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
                 }
             }
         }
     }
-    else if (PChar->StatusEffectContainer->HasStatusEffectByFlag(EFFECTFLAG_CONFRONTATION))
+    else if (PChar->StatusEffectContainer->HasStatusEffectByFlag(xi::StatusEffectFlag::Confrontation))
     {
         // Player is zoning into a zone that does not have a battlefield but the player has a confrontation effect - remove it
-        PChar->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+        PChar->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
         if (PChar->PPet)
         {
-            PChar->PPet->StatusEffectContainer->DelStatusEffectsByFlag(EFFECTFLAG_CONFRONTATION, true);
+            PChar->PPet->StatusEffectContainer->DelStatusEffectsByFlag(xi::StatusEffectFlag::Confrontation, EffectNotice::Silent);
         }
     }
-    else if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_LEVEL_SYNC))
+    else if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::LevelSync))
     {
         // Logging in with no party and a level sync status = bad.
         if (!PChar->PParty)
         {
-            PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_LEVEL_SYNC);
-            PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_LEVEL_RESTRICTION);
+            PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::LevelSync);
+            PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::LevelRestriction);
         }
     }
 
@@ -1079,6 +1185,28 @@ void CZone::CharZoneIn(CCharEntity* PChar)
     PChar->PLatentEffectContainer->CheckLatentsZone();
 
     charutils::ReadHistory(PChar);
+
+    // Restore seal recast timer if enabled
+    if (settings::get<bool>("main.PERSIST_SEAL_TIMERS"))
+    {
+        auto expirationTimestamp = static_cast<uint32>(PChar->getCharVar("SealTimerExpiry"));
+        if (expirationTimestamp > 0)
+        {
+            auto currentTimestamp = earth_time::timestamp();
+            if (expirationTimestamp > currentTimestamp)
+            {
+                auto remainingSeconds = expirationTimestamp - currentTimestamp;
+                // Sanity check: seal timer should never exceed 5 minutes (300 seconds)
+                if (remainingSeconds <= 300)
+                {
+                    PChar->PRecastContainer->AddLootRecast(LootRecastID::Seal, std::chrono::seconds(remainingSeconds));
+                }
+            }
+
+            // Ensure var is wiped after zone in
+            PChar->setCharVar("SealTimerExpiry", 0);
+        }
+    }
 
     moduleutils::OnCharZoneIn(PChar);
 }
@@ -1093,6 +1221,23 @@ void CZone::CharZoneOut(CCharEntity* PChar)
         {
             luautils::OnTriggerAreaLeave(PChar, triggerArea);
             break;
+        }
+    }
+
+    // Save seal recast timer if enabled
+    if (settings::get<bool>("main.PERSIST_SEAL_TIMERS"))
+    {
+        auto* recast = PChar->PRecastContainer->GetLootRecast(LootRecastID::Seal);
+        if (recast && recast->RecastTime > 0s)
+        {
+            auto remaining = (recast->TimeStamp + recast->RecastTime) - timer::now();
+            // Don't save if it will expire during zoning process
+            if (remaining > 10s)
+            {
+                auto remainingSeconds    = std::chrono::duration_cast<std::chrono::seconds>(remaining).count();
+                auto expirationTimestamp = earth_time::timestamp() + static_cast<uint32>(remainingSeconds);
+                PChar->setCharVar("SealTimerExpiry", static_cast<int32>(expirationTimestamp));
+            }
         }
     }
 
@@ -1123,8 +1268,8 @@ void CZone::CharZoneOut(CCharEntity* PChar)
                 }
             }
         }
-        PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_LEVEL_SYNC);
-        PChar->StatusEffectContainer->DelStatusEffectSilent(EFFECT_LEVEL_RESTRICTION);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::LevelSync);
+        PChar->StatusEffectContainer->DelStatusEffectSilent(xi::StatusEffect::LevelRestriction);
     }
 
     if (PChar->PTreasurePool != nullptr) // TODO: Condition for eliminating problems with MobHouse, we need to solve it once and for all!
@@ -1156,7 +1301,7 @@ void CZone::CharZoneOut(CCharEntity* PChar)
 
 bool CZone::IsZoneActive() const
 {
-    return ZoneTimer != nullptr;
+    return zoneTimerToken_.has_value();
 }
 
 CZoneEntities* CZone::GetZoneEntities()
@@ -1164,41 +1309,42 @@ CZoneEntities* CZone::GetZoneEntities()
     return m_zoneEntities;
 }
 
-void CZone::CheckTriggerAreas()
+auto CZone::CheckTriggerAreas() -> Task<void>
 {
     TracyZoneScoped;
 
-    // clang-format off
-    ForEachChar([&](CCharEntity* PChar)
-    {
-        // TODO: When we start to use octrees or spatial hashing to split up zones,
-        //     : use them here to make the search domain smaller.
-
-        // Do not enter trigger areas while loading in. Set in xi.player.onGameIn
-        if (PChar->GetLocalVar("ZoningIn") > 0)
+    ForEachChar(
+        [&](CCharEntity* PChar)
         {
-            return;
-        }
+            // TODO: When we start to use octrees or spatial hashing to split up zones,
+            //     : use them here to make the search domain smaller.
 
-        for (const auto& triggerArea : m_triggerAreaList)
-        {
-            const auto triggerAreaID = triggerArea->getTriggerAreaID();
-            if (triggerArea->isPointInside(PChar->loc.p))
+            // Do not enter trigger areas while loading in. Set in xi.player.onGameIn
+            if (PChar->GetLocalVar("ZoningIn") > 0)
             {
-                if (!PChar->isInTriggerArea(triggerAreaID))
+                return;
+            }
+
+            for (const auto& triggerArea : m_triggerAreaList)
+            {
+                const auto triggerAreaID = triggerArea->getTriggerAreaID();
+                if (triggerArea->isPointInside(PChar->loc.p))
                 {
-                    // Add the TriggerArea to the players cache of current TriggerAreas
-                    PChar->onTriggerAreaEnter(triggerAreaID);
-                    luautils::OnTriggerAreaEnter(PChar, triggerArea);
+                    if (!PChar->isInTriggerArea(triggerAreaID))
+                    {
+                        // Add the TriggerArea to the players cache of current TriggerAreas
+                        PChar->onTriggerAreaEnter(triggerAreaID);
+                        luautils::OnTriggerAreaEnter(PChar, triggerArea);
+                    }
+                }
+                else if (PChar->isInTriggerArea(triggerAreaID))
+                {
+                    // Remove the TriggerArea from the players cache of current TriggerAreas
+                    PChar->onTriggerAreaLeave(triggerAreaID);
+                    luautils::OnTriggerAreaLeave(PChar, triggerArea);
                 }
             }
-            else if (PChar->isInTriggerArea(triggerAreaID))
-            {
-                // Remove the TriggerArea from the players cache of current TriggerAreas
-                PChar->onTriggerAreaLeave(triggerAreaID);
-                luautils::OnTriggerAreaLeave(PChar, triggerArea);
-            }
-        }
-    });
-    // clang-format on
+        });
+
+    co_return;
 }

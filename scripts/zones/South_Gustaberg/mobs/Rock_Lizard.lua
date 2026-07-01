@@ -8,18 +8,17 @@ local ID = zones[xi.zone.SOUTH_GUSTABERG]
 ---@type TMobEntity
 local entity = {}
 
-local lizzyPHTable =
-{
-    [ID.mob.LEAPING_LIZZY[1] - 1] = ID.mob.LEAPING_LIZZY[1], -- -275.441 20.451 -347.294
-    [ID.mob.LEAPING_LIZZY[2] - 1] = ID.mob.LEAPING_LIZZY[2], -- -322.871 30.052 -401.184
-}
+entity.onMobInitialize = function(mob)
+    -- South Gustaberg lizards drop earth crystals
+    mob:setCrystalElement(xi.element.EARTH)
+end
 
 entity.onMobDeath = function(mob, player, optParams)
     xi.regime.checkRegime(player, mob, 80, 1, xi.regime.type.FIELDS)
 end
 
 entity.onMobDespawn = function(mob)
-    xi.mob.phOnDespawn(mob, lizzyPHTable, 9, 1) -- Pure Lottery
+    xi.mob.phOnDespawn(mob, ID.mob.LEAPING_LIZZY[1], 10, 1) -- Pure Lottery
 end
 
 return entity

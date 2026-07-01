@@ -3,7 +3,11 @@
 -- Area: Nyzul Isle
 -- Info : Floor 60 80 100 Boss
 -----------------------------------
-mixins = { require('scripts/mixins/nyzul_boss_drops') }
+mixins =
+{
+    require('scripts/mixins/nyzul_boss_drops'),
+    require('scripts/mixins/families/khimaira'),
+}
 -----------------------------------
 ---@type TMobEntity
 local entity = {}
@@ -22,9 +26,6 @@ entity.onMobSpawn = function(mob)
     mob:addMod(xi.mod.ATT, 100)
     -- TODO: mob:addResist({ xi.resist.ENFEEBLING_STUN, 10, 0 })
     mob:setMobMod(xi.mobMod.ROAM_DISTANCE, 15)
-end
-
-entity.onMobFight = function(mob, target)
 end
 
 entity.onMobDeath = function(mob, player, optParams)

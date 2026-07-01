@@ -21,36 +21,35 @@
 
 #pragma once
 
-#include "common/blowfish.h"
-#include "common/cbasetypes.h"
-#include "common/ipp.h"
+#include <common/blowfish.h>
+#include <common/cbasetypes.h>
+#include <common/ipp.h>
+#include <common/scheduler.h>
 
-#include "map_constants.h"
+#include <map/map_constants.h>
+#include <map/socket.h>
 
 #include <asio/ip/network_v4.hpp>
 #include <asio/ip/udp.hpp>
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 
-class MapSocket
+class MapSocket final : public Socket
 {
 public:
-    using ReceiveFn = std::function<void(const std::error_code&, std::span<uint8>, IPP)>;
+    MapSocket(Scheduler& scheduler, uint16 port, ReceiveFn onReceiveFn);
+    ~MapSocket() override;
 
-    MapSocket(uint16 port, ReceiveFn onReceiveFn); // TODO: Move passing in onReceiveFn to recvFor
-    ~MapSocket();
-
-    void recvFor(duration duration);
-    void send(const IPP& ipp, std::span<uint8> buffer);
+    void send(const IPP& ipp, ByteSpan buffer) override;
 
 private:
-    void startReceive();
+    void receive();
 
+    Scheduler&              scheduler_;
     uint16                  port_;
-    asio::io_context        io_context_; // TODO: Use Application::io_context_ when available
     asio::ip::udp::socket   socket_;
     NetworkBuffer           buffer_; // TODO: Pass in the global buffer, or only use this one
-    asio::ip::udp::endpoint remote_endpoint_;
+    asio::ip::udp::endpoint remoteEndpoint_;
 
     ReceiveFn onReceiveFn_;
 };

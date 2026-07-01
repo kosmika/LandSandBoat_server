@@ -57,13 +57,13 @@ zoneObject.afterZoneIn = function(player)
         local lvlCap = player:getCharVar('PSOXJA_RESTRICTION_LVL')
 
         if lvlCap > 0 then -- LV cap depends on entrance
-            player:addStatusEffect(xi.effect.LEVEL_RESTRICTION, lvlCap, 0, 0)
+            player:addStatusEffect(xi.effect.LEVEL_RESTRICTION, { power = lvlCap, origin = player })
         end
     end
 end
 
 zoneObject.onTriggerAreaEnter = function(player, triggerArea)
-    player:startEvent(19 + triggerArea:getTriggerAreaID())
+    player:startOptionalCutscene(19 + triggerArea:getTriggerAreaID(), { cs_option = 0, canSkip = true })
 end
 
 zoneObject.onTriggerAreaLeave = function(player, triggerArea)

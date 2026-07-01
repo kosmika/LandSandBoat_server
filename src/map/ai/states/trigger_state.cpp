@@ -22,8 +22,8 @@
 #include "trigger_state.h"
 
 #include "ai/ai_container.h"
-#include "entities/charentity.h"
-#include "entities/npcentity.h"
+#include "entities/char_entity.h"
+#include "entities/npc_entity.h"
 #include "lua/luautils.h"
 
 CTriggerState::CTriggerState(CBaseEntity* PEntity, uint16 targid, bool door)
@@ -32,7 +32,7 @@ CTriggerState::CTriggerState(CBaseEntity* PEntity, uint16 targid, bool door)
 {
 }
 
-bool CTriggerState::Update(time_point tick)
+bool CTriggerState::Update(timer::time_point tick)
 {
     if (!IsCompleted())
     {

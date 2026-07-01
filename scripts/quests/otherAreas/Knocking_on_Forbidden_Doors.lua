@@ -110,7 +110,10 @@ quest.sections =
                         return quest:progressEvent(556, { [1] = xi.ki.MIRE_INCENSE })
 
                     -- Second time clicking on ???
-                    elseif progressVar == 3 then
+                    elseif
+                        progressVar == 3 and
+                        not GetMobByID(misareauxID.mob.ALSHA):isSpawned()
+                    then
                         return quest:progressEvent(557, { [1] = xi.ki.MIRE_INCENSE })
 
                     -- Clicking on the ??? after killing NM
@@ -123,8 +126,15 @@ quest.sections =
             ['Alsha'] =
             {
                 onMobDeath = function(mob, player, optParams)
-                    if quest:getVar(player, 'Prog') == 3 then
-                        quest:setVar(player, 'Prog', 4)
+                    -- Needs backend cpp changes to allow Alsha defeating herself to not allow credit.
+                    if optParams.isKiller then
+                        local alliance = player:getAlliance()
+
+                        for _, member in ipairs(alliance) do
+                            if member:getCharVar('Quest[4][78]Prog') == 3 then
+                                quest:setVar(player, 'Prog', 4)
+                            end
+                        end
                     end
                 end,
             },
@@ -146,6 +156,7 @@ quest.sections =
 
                 [558] = function(player, csid, option, npc)
                     quest:setVar(player, 'Prog', 5)
+                    player:delKeyItem(xi.ki.MIRE_INCENSE)
                     npcUtil.giveKeyItem(player, xi.ki.BETTER_HUMES_AND_MANNEQUINS)
                 end,
             },
@@ -204,10 +215,11 @@ quest.sections =
                     for itemId = xi.item.HUME_M_MANNEQUIN, xi.item.GALKA_MANNEQUIN do
                         if npcUtil.tradeHasExactly(trade, itemId) then
                             tradedMannequin = itemId
+                            break
                         end
                     end
 
-                    if tradedMannequin then
+                    if tradedMannequin ~= 0 then
                         return quest:progressEvent(319, { [0] = 2,
                             [1] = xi.mannequin.getMannequins(player), -- Player Mannequin List
                             [2] = xi.mannequin.cost.PURCHASE,
@@ -258,12 +270,16 @@ quest.sections =
                     then
                         player:confirmTrade()
                         npcUtil.giveItem(player, xi.item.HUME_M_MANNEQUIN + option - 1)
+                        local race = ((option - 1) % 8) + 1
+                        xi.mannequin.setMannequinPose(player, race, 0)
                     end
                 end,
 
                 [321] = function(player, csid, option, npc)
                     -- If the transaction failed, the option is nil.
-                    if
+                    if player:getFreeSlotsCount() == 0 then
+                        player:messageSpecial(mhauraID.text.ITEM_CANNOT_BE_OBTAINED, xi.item.HUME_M_MANNEQUIN + option - 1)
+                    elseif
                         -- Purchase the mannequin.  Option = race (1-8)
                         option >= 1 and
                         option <= 8 and
@@ -271,6 +287,8 @@ quest.sections =
                     then
                         player:messageSpecial(mhauraID.text.ITEM_OBTAINED, xi.item.HUME_M_MANNEQUIN + option - 1)
                         player:addItem(xi.item.HUME_M_MANNEQUIN + option - 1)
+                        local race = ((option - 1) % 8) + 1
+                        xi.mannequin.setMannequinPose(player, race, 0)
                     elseif
                         option >= 10 and
                         player:delGil(xi.mannequin.cost.POSE)

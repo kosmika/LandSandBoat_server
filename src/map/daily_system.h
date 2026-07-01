@@ -19,17 +19,14 @@
 ===========================================================================
 */
 
-#ifndef _DAILYSYSTEM_H
-#define _DAILYSYSTEM_H
+#pragma once
 
-#include "map_server.h"
-
-#include "entities/charentity.h"
+#include "entities/char_entity.h"
 
 namespace daily
 {
-    uint16 SelectItem(CCharEntity* player, uint8 dial);
-    void   LoadDailyItems();
-} // namespace daily
 
-#endif //_DAILYSYSTEM_H
+uint16 SelectItem(CCharEntity* player, uint8 dial);
+void   LoadDailyItems();
+
+} // namespace daily

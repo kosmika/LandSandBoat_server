@@ -30,16 +30,23 @@
 #include "login_packets.h"
 
 #include "common/ipp.h"
+#include "common/zmq/channel.h"
+
+#include <zmq.hpp>
 
 // port 54230
 class data_session : public handler_session
 {
 public:
-    data_session(asio::ssl::stream<asio::ip::tcp::socket> socket)
+    data_session(asio::ssl::stream<asio::ip::tcp::socket> socket, ipc::Channel<zmq::message_t> dealerChannel)
     : handler_session(std::move(socket))
+    , dealerChannel_(dealerChannel)
     {
         DebugSockets("data_session from IP %s", ipAddress);
     }
+
+    void deleteCharFromCharInfo(uint32_t charid);
+    void addCharIntoCharInfo(const lpkt_chr_info_sub2& charInfo);
 
 protected:
     void read_func() override;
@@ -50,4 +57,10 @@ protected:
     }
 
     void handle_error(std::error_code ec, std::shared_ptr<handler_session> self) override;
+
+private:
+    ipc::Channel<zmq::message_t> dealerChannel_;
+
+    lpkt_chr_info2 characterInfoResponse = {}; // Store this for char deletion/creation client behavior. We need to skip slots instead of "flatten" them.
+    bool           generatedCharInfo     = false;
 };

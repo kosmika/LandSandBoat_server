@@ -7,11 +7,12 @@ mixins = { require('scripts/mixins/fomor_hate') }
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobSpawn = function(mob)
-    mob:setLocalVar('fomorHateAdj', 1)
+entity.onMobInitialize = function(mob)
+    xi.pet.setMobPet(mob, 4, 'Gigass_Sheep')
 end
 
-entity.onMobDeath = function(mob, player, optParams)
+entity.onMobSpawn = function(mob)
+    mob:setLocalVar('fomorHateAdj', 1)
 end
 
 return entity

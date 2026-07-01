@@ -275,7 +275,7 @@ INSERT INTO `guild_item_points` VALUES (1,17568,9,1800,15600,3); -- Eight-Sided 
 INSERT INTO `guild_item_points` VALUES (1,139,9,13430,22560,4); -- Star Globe (13430 / 22560)
 INSERT INTO `guild_item_points` VALUES (1,17364,9,5697,20880,5); -- Cythara Anglica (5697 / 20880)
 INSERT INTO `guild_item_points` VALUES (1,17837,9,7022,20880,5); -- Cythara Anglica +1 (7022 / 20880)
-INSERT INTO `guild_item_points` VALUES (1,76,9,7520,22560,6); -- Royal Bookshelf (7520 / 22560)
+INSERT INTO `guild_item_points` VALUES (1,76,9,14625,22560,6); -- Royal Bookshelf (14625 / 22560)
 INSERT INTO `guild_item_points` VALUES (1,77,9,14600,22560,7); -- Bookshelf (14600 / 22560)
 
 -- Blacksmithing / Amateur
@@ -500,8 +500,8 @@ INSERT INTO `guild_item_points` VALUES (3,12433,2,800,12480,1); -- Brass Mask (8
 INSERT INTO `guild_item_points` VALUES (3,12532,2,832,12480,1); -- Brass Mask +1 (832 / 12480)
 INSERT INTO `guild_item_points` VALUES (3,17081,2,138,6720,2); -- Brass Rod (138 / 6720)
 INSERT INTO `guild_item_points` VALUES (3,17148,2,219,6720,2); -- Brass Rod +1 (219 / 6720)
-INSERT INTO `guild_item_points` VALUES (3,13327,2,345,9120,3); -- Silver Hairpin (345 / 9120)
-INSERT INTO `guild_item_points` VALUES (3,13370,2,364,9120,3); -- Silver Hairpin +1 (364 / 9120)
+INSERT INTO `guild_item_points` VALUES (3,12495,2,345,9120,3); -- Silver Hairpin (345 / 9120)
+INSERT INTO `guild_item_points` VALUES (3,12531,2,364,9120,3); -- Silver Hairpin +1 (364 / 9120)
 INSERT INTO `guild_item_points` VALUES (3,17043,2,463,10080,4); -- Brass Hammer (463 / 10080)
 INSERT INTO `guild_item_points` VALUES (3,17149,2,544,10080,4); -- Brass Hammer +1 (544 / 10080)
 INSERT INTO `guild_item_points` VALUES (3,13196,2,357,9120,5); -- Silver Belt (357 / 9120)
@@ -1067,7 +1067,7 @@ INSERT INTO `guild_item_points` VALUES (6,13062,3,542,10320,7); -- Green Gorget 
 -- Bonecraft / Apprentice
 INSERT INTO `guild_item_points` VALUES (6,17352,4,780,12960,0); -- Horn (780 / 12960)
 INSERT INTO `guild_item_points` VALUES (6,17371,4,840,12960,0); -- Horn +1 (840 / 12960)
-INSERT INTO `guild_item_points` VALUES (6,17371,4,1540,15840,1); -- Carapace Subligar (1540 / 15840)
+INSERT INTO `guild_item_points` VALUES (6,12837,4,1540,15840,1); -- Carapace Subligar (1540 / 15840)
 INSERT INTO `guild_item_points` VALUES (6,12914,4,1610,15840,1); -- Carapace Subligar +1 (1610 / 15840)
 INSERT INTO `guild_item_points` VALUES (6,13461,4,1812,16560,2); -- Carapace Ring (1812 / 16560)
 INSERT INTO `guild_item_points` VALUES (6,13503,4,2537,16560,2); -- Carapace Ring +1 (2537 / 16560)

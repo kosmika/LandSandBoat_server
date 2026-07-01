@@ -21,10 +21,10 @@
 
 #include "inactive_state.h"
 #include "ai/ai_container.h"
-#include "entities/battleentity.h"
+#include "entities/battle_entity.h"
 #include "status_effect_container.h"
 
-CInactiveState::CInactiveState(CBaseEntity* PEntity, duration _duration, bool canChangeState, bool untargetable)
+CInactiveState::CInactiveState(CBaseEntity* PEntity, timer::duration _duration, bool canChangeState, bool untargetable)
 : CState(PEntity, 0)
 , m_duration(_duration)
 , m_canChangeState(canChangeState)
@@ -36,7 +36,7 @@ CInactiveState::CInactiveState(CBaseEntity* PEntity, duration _duration, bool ca
     }
 }
 
-bool CInactiveState::Update(time_point tick)
+bool CInactiveState::Update(timer::time_point tick)
 {
     auto* PBattleEntity{ dynamic_cast<CBattleEntity*>(m_PEntity) };
     if (PBattleEntity && m_duration == 0ms)
@@ -47,7 +47,7 @@ bool CInactiveState::Update(time_point tick)
         }
 
         if (!PBattleEntity->StatusEffectContainer->HasPreventActionEffect() ||
-            (PBattleEntity->StatusEffectContainer->HasStatusEffect({ EFFECT_CHARM, EFFECT_CHARM_II }) && !PBattleEntity->StatusEffectContainer->HasPreventActionEffect(true)))
+            (PBattleEntity->StatusEffectContainer->HasStatusEffect({ xi::StatusEffect::CharmI, xi::StatusEffect::CharmIi }) && !PBattleEntity->StatusEffectContainer->HasPreventActionEffect(true)))
         {
             return true;
         }
@@ -56,6 +56,6 @@ bool CInactiveState::Update(time_point tick)
     return m_duration > 0ms && tick > GetEntryTime() + m_duration;
 }
 
-void CInactiveState::Cleanup(time_point tick)
+void CInactiveState::Cleanup(timer::time_point tick)
 {
 }

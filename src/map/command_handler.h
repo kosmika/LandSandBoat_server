@@ -19,25 +19,35 @@
 ===========================================================================
 */
 
-#ifndef _COMMAND_HANDLER_H
-#define _COMMAND_HANDLER_H
+#pragma once
 
-#include "common/cbasetypes.h"
-#include "common/logging.h"
+#include <common/cbasetypes.h>
+#include <common/logging.h>
+#include <common/scheduler.h>
 
 #include <list>
 #include <string>
 
+//
+// Forward declarations
+//
+
 class CCharEntity;
 namespace sol
 {
-    class state;
+
+class state;
+
 }
+
+enum class CommandResult : uint8
+{
+    Success,
+    Failure,
+};
 
 class CCommandHandler
 {
 public:
-    static int32 call(sol::state& lua, CCharEntity* PChar, const std::string& commandline);
+    static auto call(Scheduler& scheduler, sol::state& lua, CCharEntity* PChar, const std::string& commandline) -> CommandResult;
 };
-
-#endif // _COMMAND_HANDLER_H

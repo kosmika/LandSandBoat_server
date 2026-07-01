@@ -6,7 +6,7 @@
 local effectObject = {}
 
 effectObject.onEffectGain = function(target, effect)
-    target:setAnimation(33)
+    target:setAnimation(xi.animation.HEALING)
 
     -- Abyssea Lights and time remaining check
     if
@@ -21,33 +21,8 @@ effectObject.onEffectGain = function(target, effect)
         end
     end
 
-    -- Dances with Luopans
-    if
-        target:getLocalVar('GEO_DWL_Locus_Area') == 1 and
-        target:getCharVar('GEO_DWL_Luopan') == 0
-    then
-        local ID                = zones[target:getZoneID()]
-        local maxWaitTime       = 480 -- Max wait of 8 minutes.
-        local secondsPerTick    = xi.settings.map.HEALING_TICK_DELAY
-        local minWaitTime       = math.min(3 * secondsPerTick, maxWaitTime)
-        local waitTimeInSeconds = math.random(minWaitTime, maxWaitTime)
-
-        target:messageSpecial(ID.text.ENERGIES_COURSE)
-        target:setLocalVar('GEO_DWL_Resting', os.time() + waitTimeInSeconds)
-
-        target:timer(waitTimeInSeconds * 1000, function(targetArg)
-            local finishTime = targetArg:getLocalVar('GEO_DWL_Resting')
-
-            if
-                finishTime > 0 and
-                os.time() >= finishTime
-            then
-                targetArg:messageSpecial(ID.text.MYSTICAL_WARMTH) -- You feel a mystical warmth welling up inside you!
-                targetArg:setLocalVar('GEO_DWL_Resting', 0)
-                targetArg:setCharVar('GEO_DWL_Luopan', 1)
-            end
-        end)
-    end
+    -- Dances with Luopans: charge the luopan while resting at an Ergon Locus
+    xi.dancesWithLuopans.onHealing(target)
 
     if target:getObjType() == xi.objType.PC then
         xi.voidwalker.onHealing(target)
@@ -57,7 +32,21 @@ end
 effectObject.onEffectTick = function(target, effect)
     local healtime = effect:getTickCount()
 
-    if healtime > 2 then
+    if healtime > 1 then
+        -- Summoned avatars and spirits cancel healing on first healing tick if summoned
+        local pet = target:getPet()
+        if pet ~= nil then
+            local petId = pet:getPetID()
+            if
+                pet:isAvatar() or
+                (not pet:isCharmed() and petId >= xi.petId.FIRE_SPIRIT and petId <= xi.petId.DARK_SPIRIT)
+            then
+                target:messageBasic(xi.msg.basic.CANT_HEAL_WITH_AVATAR)
+                target:delStatusEffect(xi.effect.HEALING)
+                return
+            end
+        end
+
         -- curse II also known as "zombie"
         if
             not target:hasStatusEffect(xi.effect.DISEASE) and
@@ -69,7 +58,8 @@ effectObject.onEffectTick = function(target, effect)
                 target:getContinentID() == 1 and
                 target:hasStatusEffect(xi.effect.SIGNET)
             then
-                healHP = 10 + (3 * math.floor(target:getMainLvl() / 10)) + (healtime - 2) * (1 + math.floor(target:getMaxHP() / 300)) + target:getMod(xi.mod.HPHEAL)
+                healHP = 10 + (3 * math.floor(target:getMainLvl() / 10)) +
+                    (healtime - 2) * (1 + math.floor(target:getMaxHP() / 300)) + target:getMod(xi.mod.HPHEAL)
             else
                 target:addTP(xi.settings.main.HEALING_TP_CHANGE)
                 healHP = 10 + (healtime - 2) + target:getMod(xi.mod.HPHEAL)
@@ -93,11 +83,11 @@ effectObject.onEffectTick = function(target, effect)
 end
 
 effectObject.onEffectLose = function(target, effect)
-    target:setAnimation(0)
-    target:delStatusEffect(xi.effect.LEAVEGAME)
+    target:setAnimation(xi.animation.NONE)
+    target:delStatusEffectSilent(xi.effect.LEAVEGAME)
 
-    -- Dances with Luopans
-    target:setLocalVar('GEO_DWL_Resting', 0)
+    -- Dances with Luopans: stopping the rest cancels the luopan charge
+    xi.dancesWithLuopans.onEffectLose(target)
 end
 
 return effectObject

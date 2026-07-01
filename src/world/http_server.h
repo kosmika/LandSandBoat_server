@@ -23,6 +23,7 @@
 
 #include "common/logging.h"
 #include "common/synchronized.h"
+#include "common/timer.h"
 
 #include "map/zone.h"
 
@@ -33,14 +34,15 @@
 class HTTPServer
 {
 public:
-    HTTPServer();
+    HTTPServer(Scheduler& scheduler);
     ~HTTPServer();
 
     void LockingUpdate();
 
 private:
-    httplib::Server         m_httpServer;
-    std::atomic<time_point> m_lastUpdate;
+    Scheduler&                     scheduler_;
+    httplib::Server                httpServer_;
+    std::atomic<timer::time_point> lastUpdate_;
 
     struct APIDataCache
     {
@@ -49,5 +51,5 @@ private:
         std::array<uint32, ZONEID::MAX_ZONEID> zonePlayerCounts;
     };
 
-    SynchronizedShared<APIDataCache> m_apiDataCache;
+    SynchronizedShared<APIDataCache> apiDataCache_;
 };

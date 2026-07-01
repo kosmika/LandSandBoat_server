@@ -9,23 +9,28 @@ mixins = { require('scripts/mixins/rage') }
 local entity = {}
 
 entity.onMobInitialize = function(mob)
+    mob:setMobMod(xi.mobMod.GIL_MIN, 20000)
+    mob:setMobMod(xi.mobMod.GIL_MAX, 20000)
+    mob:setMobMod(xi.mobMod.MUG_GIL, 8500)
+    mob:addImmunity(xi.immunity.STUN)
+    mob:addImmunity(xi.immunity.SILENCE)
+    mob:addImmunity(xi.immunity.LIGHT_SLEEP)
+    mob:addImmunity(xi.immunity.DARK_SLEEP)
+    mob:addImmunity(xi.immunity.PETRIFY)
+    mob:setMobMod(xi.mobMod.IDLE_DESPAWN, 90)
     mob:setMobMod(xi.mobMod.ADD_EFFECT, 1)
     mob:setMobMod(xi.mobMod.MAGIC_COOL, 60)
+    mob:setMobMod(xi.mobMod.AOE_HIT_ALL, 1)
 end
 
 entity.onMobSpawn = function(mob)
     mob:setLocalVar('[rage]timer', 3600) -- 60 minutes
     mob:setMobMod(xi.mobMod.NO_MOVE, 0)
-    mob:setMobMod(xi.mobMod.WEAPON_BONUS, 58) -- 145 total weapaon damage
+    mob:setMobMod(xi.mobMod.BASE_DAMAGE_MODIFIER, 58) -- 145 total weapaon damage
     mob:setMod(xi.mod.MDEF, 20)
     mob:setMod(xi.mod.ATT, 462)
     mob:setMod(xi.mod.DEF, 500)
     mob:setMod(xi.mod.EVA, 370)
-    mob:setMod(xi.mod.TRIPLE_ATTACK, 5)
-    mob:addImmunity(xi.immunity.LIGHT_SLEEP)
-    mob:addImmunity(xi.immunity.DARK_SLEEP)
-    mob:addImmunity(xi.immunity.STUN)
-
     -- Despawn the ???
     GetNPCByID(ID.npc.BEHEMOTH_QM):setStatus(xi.status.DISAPPEAR)
 end
@@ -57,30 +62,31 @@ entity.onMobFight = function(mob, target)
 
     local delay = mob:getLocalVar('delay')
     if
-        os.time() > delay and
+        GetSystemTime() > delay and
         mob:canUseAbilities()
     then -- Use Meteor every 40s, based on capture
-        mob:castSpell(218, target) -- meteor
-        mob:setLocalVar('delay', os.time() + 40)
+        mob:castSpell(xi.magic.spell.METEOR, target)
+        mob:setLocalVar('delay', GetSystemTime() + 40)
     end
 end
 
 entity.onAdditionalEffect = function(mob, target, damage)
-    return xi.mob.onAddEffect(mob, target, damage, xi.mob.ae.STUN, { chance = 20, duration = math.random(4, 8) })
+    return xi.mob.onAddEffect(mob, target, damage, xi.mob.ae.STUN, { chance = 20, duration = math.random(4, 9) })
 end
 
 entity.onSpellPrecast = function(mob, spell)
-    if spell:getID() == 218 then
+    if spell:getID() == xi.magic.spell.METEOR then
         spell:setAoE(xi.magic.aoe.RADIAL)
-        spell:setFlag(xi.magic.spellFlag.HIT_ALL)
-        spell:setRadius(30)
+        spell:setRadius(25)
         spell:setAnimation(280)
         spell:setMPCost(0)
     end
 end
 
 entity.onMobDeath = function(mob, player, optParams)
-    player:addTitle(xi.title.BEHEMOTH_DETHRONER)
+    if player then
+        player:addTitle(xi.title.BEHEMOTH_DETHRONER)
+    end
 end
 
 entity.onMobDespawn = function(mob)

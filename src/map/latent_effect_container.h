@@ -23,9 +23,9 @@
 #define _LATENTEFFECTCONTAINER_H
 
 #include "common/cbasetypes.h"
-#include "common/task_manager.h"
 
-#include "entities/petentity.h"
+#include "entities/pet_entity.h"
+#include "enums/weather.h"
 #include "items/item_equipment.h"
 #include "latent_effect.h"
 
@@ -62,15 +62,15 @@ public:
     void CheckLatentsWeaponBreak(uint8 slot);
     void CheckLatentsZone();
     void CheckLatentsWeather();
-    void CheckLatentsWeather(uint16 weather);
+    void CheckLatentsWeather(Weather weather);
     void CheckLatentsTargetChange();
 
     void AddLatentEffects(std::vector<CItemEquipment::itemLatent>& latentList, uint8 reqLvl, uint8 slot);
     void DelLatentEffects(uint8 reqLvl, uint8 slot);
     bool HasAllLatentsActive(uint8 slot);
 
-    void AddLatentEffect(LATENT conditionID, uint16 conditionValue, Mod modID, int16 modValue);
-    bool DelLatentEffect(LATENT conditionID, uint16 conditionValue, Mod modID, int16 modValue);
+    void AddLatentEffect(xi::Latent conditionID, uint16 conditionValue, Mod modID, int16 modValue);
+    auto DelLatentEffect(xi::Latent conditionID, uint16 conditionValue, Mod modID, int16 modValue) -> bool;
 
     CLatentEffectContainer(CCharEntity* PEntity);
 
@@ -79,7 +79,7 @@ private:
     std::vector<CLatentEffect> m_LatentEffectList;
 
     void ProcessLatentEffects(const std::function<bool(CLatentEffect&)>& logic);
-    bool ProcessLatentEffect(CLatentEffect& latentEffect, bool isDuringWs = false);
+    auto ProcessLatentEffect(CLatentEffect& latentEffect, bool isDuringWs = false) -> bool;
     bool ApplyLatentEffect(CLatentEffect& effect, bool expression);
 };
 

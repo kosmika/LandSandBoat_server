@@ -9,7 +9,7 @@ local content = Battlefield:new({
     zoneId        = xi.zone.QUBIA_ARENA,
     battlefieldId = xi.battlefield.id.SHATTERING_STARS_DRK,
     maxPlayers    = 1,
-    levelCap      = 99,
+    levelCap      = xi.settings.main.MAX_LEVEL,
     allowSubjob   = false,
     timeLimit     = utils.minutes(10),
     index         = 6,
@@ -19,9 +19,12 @@ local content = Battlefield:new({
 })
 
 function content:entryRequirement(player, npc, isRegistrant, trade)
-    return player:getQuestStatus(xi.questLog.JEUNO, xi.quest.id.jeuno.SHATTERING_STARS) >= xi.questStatus.QUEST_ACCEPTED and
-        player:getMainJob() == xi.job.DRK and
-        player:getMainLvl() >= 66
+    local jobRequirement   = player:getMainJob() == xi.job.DRK
+    local levelRequirement = player:getMainLvl() >= 66
+    local questStatus      = player:getQuestStatus(xi.questLog.JEUNO, xi.quest.id.jeuno.SHATTERING_STARS)
+    local questRequirement = questStatus == xi.questStatus.QUEST_COMPLETED or (questStatus == xi.questStatus.QUEST_ACCEPTED and player:getCharVar('Quest[3][132]tradedTestimony') == 1)
+
+    return jobRequirement and levelRequirement and questRequirement
 end
 
 content.groups =

@@ -22,36 +22,33 @@
 #include "jailutils.h"
 
 #include "conquest_system.h"
-#include "entities/charentity.h"
+#include "entities/char_entity.h"
 
 #include "ai/ai_container.h"
 #include "ai/controllers/player_controller.h"
 
-/************************************************************************
- *                                                                       *
- *                                                                       *
- *                                                                       *
- ************************************************************************/
-
 namespace jailutils
 {
-    bool InPrison(CCharEntity* PChar)
-    {
-        TracyZoneScoped;
-        return PChar->m_GMlevel == 0 && PChar->getZone() == ZONE_MORDION_GAOL;
-    }
 
-    void Add(CCharEntity* PChar)
-    {
-        PChar->PAI->SetController(nullptr);
+auto InPrison(const CCharEntity* PChar) -> bool
+{
+    TracyZoneScoped;
 
-        // TODO:
-    }
+    return PChar->m_GMlevel == 0 && PChar->getZone() == ZONE_MORDION_GAOL;
+}
 
-    void Del(CCharEntity* PChar)
-    {
-        PChar->PAI->SetController(std::make_unique<CPlayerController>(PChar));
+void Add(CCharEntity* PChar)
+{
+    PChar->PAI->SetController(nullptr);
 
-        // TODO:
-    }
+    // TODO:
+}
+
+void Del(CCharEntity* PChar)
+{
+    PChar->PAI->SetController(std::make_unique<CPlayerController>(PChar));
+
+    // TODO:
+}
+
 }; // namespace jailutils

@@ -7,15 +7,15 @@
 ---@type TItemFood
 local itemObject = {}
 
-itemObject.onItemCheck = function(target, item, param, caster)
+itemObject.onItemCheck = function(target, item, caster)
     return xi.itemUtils.foodOnItemCheck(target, xi.foodType.BASIC)
 end
 
 -- Previously, this item used to give a 2/tick refresh effect (not food effect with refresh) if used on lightsday.
 -- That was proven wrong simply by using a movalpolos water on lightsday. It gives a food effect just like JP wiki claims
 -- https://wiki.ffo.jp/html/1657.html
-itemObject.onItemUse = function(target)
-    target:addStatusEffect(xi.effect.FOOD, 0, 0, 30 * 60, 5165)
+itemObject.onItemUse = function(target, user, item, action)
+    target:addStatusEffect(xi.effect.FOOD, { duration = 30 * 60, origin = user, subType = 5165 })
 end
 
 return itemObject

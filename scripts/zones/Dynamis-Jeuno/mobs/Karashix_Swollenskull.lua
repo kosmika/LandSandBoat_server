@@ -11,7 +11,13 @@ mixins =
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobDeath = function(mob, player, optParams)
+entity.spawnPoints =
+{
+    { x =  1.111, y =  1.402, z =  70.975 }
+}
+
+entity.onMobSpawn = function(mob)
+    xi.dynamis.mobInfo(mob)
 end
 
 return entity

@@ -21,8 +21,8 @@
 
 #include "action_queue.h"
 #include "ai/ai_container.h"
-#include "entities/baseentity.h"
-#include "lua/lua_baseentity.h"
+#include "entities/base_entity.h"
+#include "lua/lua_base_entity.h"
 #include "lua/luautils.h"
 
 CAIActionQueue::CAIActionQueue(CBaseEntity* _PEntity)
@@ -42,7 +42,7 @@ void CAIActionQueue::pushAction(queueAction_t&& action)
     }
 }
 
-void CAIActionQueue::checkAction(time_point tick)
+void CAIActionQueue::checkAction(timer::time_point tick)
 {
     while (!timerQueue.empty())
     {

@@ -1,5 +1,7 @@
 -----------------------------------
--- Tail Whip M=5
+-- Tail Whip
+-- Family: Avatar (Leviathan)
+-- Description: Deals physical damage to a target. Additional Effect: Weight
 -----------------------------------
 ---@type TAbilityPet
 local abilityObject = {}
@@ -9,35 +11,35 @@ abilityObject.onAbilityCheck = function(player, target, ability)
 end
 
 abilityObject.onPetAbility = function(target, pet, petskill, summoner, action)
-    local numhits = 1
-    local accmod = 1
-    local dmgmod = 5
-
     xi.job_utils.summoner.onUseBloodPact(target, petskill, summoner, action)
 
-    local damage = xi.summon.avatarPhysicalMove(pet, target, petskill, numhits, accmod, dmgmod, 0, xi.mobskills.magicalTpBonus.NO_EFFECT, 1, 2, 3)
-    local totaldamage = xi.summon.avatarFinalAdjustments(damage.dmg, pet, petskill, target, xi.attackType.PHYSICAL, xi.damageType.PIERCING, numhits)
+    local params = {}
 
-    local duration = 120
-    local resm = xi.mobskills.applyPlayerResistance(pet, -1, target, pet:getStat(xi.mod.INT)-target:getStat(xi.mod.INT), xi.skill.ELEMENTAL_MAGIC, 5)
-    if resm < 0.25 then
-        resm = 0
+    params.baseDamage        = pet:getWeaponDmg()
+    params.numHits           = 1
+    params.fTP               = { 3.0, 3.0, 3.0 } -- TODO: Capture fTPs for 2000/3000 TP
+    params.fTPSubsequentHits = { 3.0, 3.0, 3.0 }
+    params.str_wSC           = 0.30
+    params.attackType        = xi.attackType.PHYSICAL
+    params.damageType        = xi.damageType.BLUNT
+    params.shadowBehavior    = xi.mobskills.shadowBehavior.NUMSHADOWS_1
+    params.attackMultiplier  = { 2.0, 2.0, 2.0 }
+    params.primaryMessage    = xi.msg.basic.USES_JA_TAKE_DAMAGE
+
+    local info = xi.mobskills.mobPhysicalMove(pet, target, petskill, action, params)
+
+    if xi.mobskills.processDamage(pet, target, petskill, action, info) then
+        target:takeDamage(info.damage, pet, info.attackType, info.damageType)
+
+        local effectTable =
+        {
+            [1] = { effectId = xi.effect.WEIGHT, power = 50, duration = 120, tier = 1, origin = pet }, -- TODO: Capture power/duration/tier
+        }
+
+        xi.combat.action.executeMobskillStatusEffect(pet, target, petskill, effectTable, { messageBypass = true })
     end
 
-    duration = duration * resm
-
-    if
-        duration > 0 and
-        xi.summon.avatarPhysicalHit(petskill, totaldamage) and
-        not target:hasStatusEffect(xi.effect.WEIGHT)
-    then
-        target:addStatusEffect(xi.effect.WEIGHT, 50, 0, duration)
-    end
-
-    target:takeDamage(totaldamage, pet, xi.attackType.PHYSICAL, xi.damageType.PIERCING)
-    target:updateEnmityFromDamage(pet, totaldamage)
-
-    return totaldamage
+    return info.damage
 end
 
 return abilityObject

@@ -91,7 +91,8 @@ xi.battlefield.returnCode =
     INCREMENT_REQUEST = 3,
     LOCKED            = 4,
     REQS_NOT_MET      = 5,
-    BATTLEFIELD_FULL  = 6
+    BATTLEFIELD_FULL  = 6,
+    PARTY_ENGAGED     = 9, -- Used as 2nd parameter to LOCKED
 }
 
 xi.battlefield.leaveCode =
@@ -120,7 +121,7 @@ xi.battlefield.id =
     EYE_OF_THE_TIGER                           = 13,  -- Converted
     SHOTS_IN_THE_DARK                          = 14,  -- Experimental
     DOUBLE_DRAGONIAN                           = 15,  -- Converted
-    TODAYS_HOROSCOPE                           = 16,
+    TODAYS_HOROSCOPE                           = 16,  -- Experimental
     CONTAMINATED_COLOSSEUM                     = 17,  -- Converted
     KINDERGARTEN_CAP                           = 18,
     LAST_ORC_SHUNNED_HERO                      = 19,
@@ -170,7 +171,7 @@ xi.battlefield.id =
     ROYAL_SUCCESSION                           = 108, -- Converted
     RAPID_RAPTORS                              = 109, -- Converted
     WILD_WILD_WHISKERS                         = 110, -- Converted
-    SEASONS_GREETINGS                          = 111,
+    SEASONS_GREETINGS                          = 111, -- Experimental
     ROYALE_RAMBLE                              = 112,
     MOA_CONSTRICTORS                           = 113,
     V_FORMATION                                = 114,
@@ -183,7 +184,7 @@ xi.battlefield.id =
     WHOM_WILT_THOU_CALL                        = 132,
     SHADOW_LORD_BATTLE                         = 160,
     WHERE_TWO_PATHS_CONVERGE                   = 161,
-    KINDRED_SPIRITS                            = 162,
+    KINDRED_SPIRITS                            = 162, -- Experimental
     SURVIVAL_OF_THE_WISEST                     = 163,
     SMASH_A_MALEVOLENT_MENACE                  = 164, -- Experimental
     THROUGH_THE_QUICKSAND_CAVES                = 192, -- Converted
@@ -279,7 +280,7 @@ xi.battlefield.id =
     SHELL_WE_DANCE                             = 675, -- Experimental
     TOTENTANZ                                  = 676,
     TANGO_WITH_A_TRACKER                       = 677,
-    REQUIEM_OF_A_SIN                           = 678,
+    REQUIEM_OF_SIN                             = 678,
     ANTAGONISTIC_AMBUSCADE                     = 679,
     DARKNESS_NAMED                             = 704, -- Converted
     TEST_YOUR_MITE                             = 705,
@@ -291,13 +292,13 @@ xi.battlefield.id =
     AUTOMATON_ASSAULT                          = 740,
     MOBLINE_COMEDY                             = 741,
     ANCIENT_FLAMES_BECKON_SPIRE_OF_HOLLA       = 768, -- Converted
-    SIMULANT                                   = 769,
+    SIMULANT                                   = 769, -- Experimental
     EMPTY_HOPES                                = 770,
     ANCIENT_FLAMES_BECKON_SPIRE_OF_DEM         = 800, -- Converted
-    YOU_ARE_WHAT_YOU_EAT                       = 801,
+    YOU_ARE_WHAT_YOU_EAT                       = 801, -- Experimental
     EMPTY_DREAMS                               = 802,
     ANCIENT_FLAMES_BECKON_SPIRE_OF_MEA         = 832, -- Converted
-    PLAYING_HOST                               = 833,
+    PLAYING_HOST                               = 833, -- Experimental
     EMPTY_DESIRES                              = 834,
     DESIRES_OF_EMPTINESS                       = 864, -- Converted
     PULLING_THE_PLUG                           = 865,
@@ -307,11 +308,11 @@ xi.battlefield.id =
     OURYU_COMETH                               = 928,
     ANCIENT_VOWS                               = 960, -- Converted
     SAVAGE                                     = 961,
-    FIRE_IN_THE_SKY                            = 962,
+    FIRE_IN_THE_SKY                            = 962, -- Experimental
     BAD_SEED                                   = 963,
     BUGARD_IN_THE_CLOUDS                       = 964,
     BELOVED_OF_THE_ATLANTES                    = 965,
-    UNINVITED_GUESTS                           = 966,
+    UNINVITED_GUESTS                           = 966,  -- Experimental
     NEST_OF_NIGHTMARES                         = 967,
     ONE_TO_BE_FEARED                           = 992,  -- Converted
     WARRIORS_PATH                              = 993,  -- Converted
@@ -407,6 +408,7 @@ end
 --  - requiredKeyItems: Key items required to be able to enter the battlefield - these are removed upon entry unless 'keep = true' (optional)
 --  - title: Title given to players upon victory (optional)
 --  - grantXP: Amount of XP to grant upon victory (optional)
+--  - grantXPLockout: If true, players can only receive the grantXP once per day, resetting at JST midnight. (optional)
 --  - lossEventParams: Parameters given to the loss event (32002). Defaults to none. (optional)
 ---@diagnostic disable-next-line: duplicate-set-field
 function Battlefield:new(data)
@@ -435,6 +437,7 @@ function Battlefield:new(data)
 
     obj.title            = data.title
     obj.grantXP          = data.grantXP
+    obj.grantXPLockout   = data.grantXPLockout
     obj.levelCap         = data.levelCap or 0
     obj.allowSubjob      = (data.allowSubjob == nil or data.allowSubjob) or false
     obj.allowTrusts      = data.allowTrusts and data.allowTrusts or false
@@ -449,6 +452,8 @@ function Battlefield:new(data)
     obj.armouryCrates    = data.armouryCrates or false
     obj.experimental     = data.experimental or false
     obj.allowedAreas     = data.allowedAreas
+    obj.csParam7         = data.csParam7 and data.csParam7 or 0
+    obj.csParam8         = data.csParam8 and data.csParam8 or 0
 
     obj.sections = obj.sections or { { [obj.zoneId] = {} } }
     obj.groups   = {}
@@ -777,6 +782,16 @@ end
 -- will still send the appropriate position packet, but not change the values for the player.
 
 function Battlefield:onEntryEventUpdate(player, csid, option, npc)
+    -- Can't enter if party locked the battlefield
+    local isEnteringExisting = player:getLocalVar('[BCNM]EnterExisting') == 1
+    if isEnteringExisting and not player:hasStatusEffect(xi.effect.BATTLEFIELD) then
+        player:setLocalVar('[BCNM]EnterExisting', 0)
+        player:setLocalVar('[battlefield]area', 0)
+        player:updateEvent(xi.battlefield.returnCode.LOCKED, xi.battlefield.returnCode.PARTY_ENGAGED)
+        player:setLocalVar('noPosUpdate', 1)
+        return 0
+    end
+
     local clearTime = 1
     local name      = 'Meme'
     local partySize = 1
@@ -858,7 +873,9 @@ function Battlefield:onEntryEventUpdate(player, csid, option, npc)
             self.requiredItems.wearMessage == nil and
             #self.tradeItems > 0
         then
-            player:tradeComplete()
+            if not self.requiredItems.keep then
+                player:tradeComplete()
+            end
         end
 
         -- Handle party/alliance members
@@ -866,17 +883,18 @@ function Battlefield:onEntryEventUpdate(player, csid, option, npc)
         for _, member in pairs(alliance) do
             if
                 member:getZoneID() == zone and
+                member:getStatus() ~= xi.status.DISAPPEAR and
                 not member:hasStatusEffect(xi.effect.BATTLEFIELD) and
                 not member:getBattlefield()
             then
-                member:addStatusEffect(effect)
+                member:copyStatusEffect(effect)
                 member:registerBattlefield(self.battlefieldId, area, player:getID(), self)
             end
         end
     end
 
     local autoSkipCS = self:getLocalVar(player, 'CS') == 1 and 100 or 0
-    player:updateEvent(result, self.index, autoSkipCS, clearTime, partySize, self:checkSkipCutscene(player))
+    player:updateEvent(result, self.index, autoSkipCS, clearTime, partySize, self:checkSkipCutscene(player), self.csParam7, self.csParam8)
     player:updateEventString(name)
 
     return (status < xi.battlefield.status.LOCKED and result < xi.battlefield.returnCode.LOCKED) and 1 or 0
@@ -912,13 +930,21 @@ function Battlefield:onEventFinishWin(player, csid, option, npc)
     end
 
     if self.grantXP then
+        if self.grantXPLockout then
+            if self:getVar(player, 'XP') > GetSystemTime() then
+                return
+            end
+
+            self:setVar(player, 'XP', JstMidnight())
+        end
+
         player:addExp(self.grantXP)
     end
 end
 
 function Battlefield.onExitTrigger(player, npc)
     if player:getBattlefield() then
-        return Battlefield:progressCutscene(32003)
+        return Battlefield:progressOptionalCutscene(32003, { cs_option = 3, canSkip = true })
     end
 end
 
@@ -962,7 +988,10 @@ function Battlefield:onBattlefieldInitialize(battlefield)
     end
 
     for mobId, path in pairs(self.paths) do
-        GetMobByID(mobId):pathThrough(path, xi.path.flag.PATROL)
+        local mEntity = GetMobByID(mobId)
+        if mEntity then
+            mEntity:pathThrough(path, xi.path.flag.PATROL)
+        end
     end
 
     self:setupBattlefield(battlefield)
@@ -1103,6 +1132,31 @@ function Battlefield:onBattlefieldEnter(player, battlefield)
         end
     end
 
+    -- TODO: Test on retail to find out...
+    -- Do mobs buff inside of BCNMs with long cutscenes?
+    -- Do mobs buff when not engaged?
+    -- With a second player that has completed the mission as a "helper" to go inside skiping the
+    -- CS and watch if the mobs actually dont start casting until the initiator is out of the CS
+
+    --[[
+    if player:getID() == initiatorId then
+        local mobs = battlefield:getMobs(true, true)
+        for _, mob in pairs(mobs) do
+            if mob:isSpawned() then
+                -- wait until initiator is out of cutscene
+                mob:addListener('ROAM_TICK', 'FIRST_CAST', function(mobArg)
+                    local firstPlayer = GetPlayerByID(initiatorId)
+                    if firstPlayer and not firstPlayer:isInEvent() then
+                        mobArg:castSpell()
+
+                        mobArg:removeListener('FIRST_CAST')
+                    end
+                end)
+            end
+        end
+    end
+    --]]
+
     local ID = zones[self.zoneId]
     player:messageSpecial(ID.text.ENTERING_THE_BATTLEFIELD_FOR, 0, self.index)
 
@@ -1233,7 +1287,7 @@ end
 function Battlefield:handleOpenArmouryCrate(player, npc)
     npcUtil.openCrate(npc, function()
         local battlefield = player:getBattlefield()
-        self:handleLootRolls(battlefield, self.loot, npc)
+        self:handleLootRolls(battlefield, self.loot, npc, player:getMod(xi.mod.MOGHANCEMENT_GIL_BONUS_P))
         battlefield:setStatus(xi.battlefield.status.WON)
         battlefield:setLocalVar('cutsceneTimer', self.delayToExit)
 
@@ -1241,52 +1295,20 @@ function Battlefield:handleOpenArmouryCrate(player, npc)
     end)
 end
 
-function Battlefield:handleLootRolls(battlefield, lootTable, npc)
+function Battlefield:handleLootRolls(battlefield, lootTable, npc, gilBonusMod)
     local players = battlefield:getPlayers()
+    local firstPlayer = players[1]
 
-    for i = 1, #lootTable, 1 do
-        local lootGroup = lootTable[i]
+    local selectedLoot = utils.selectFromLootGroups(firstPlayer, lootTable)
+    for _, entry in ipairs(selectedLoot) do
+        if entry.itemId ~= xi.item.GIL then
+            firstPlayer:addTreasure(entry.itemId, npc)
+        else
+            local gilBonusPct  = (100 + gilBonusMod) / 100
+            local gilPerPlayer = entry.amount * gilBonusPct / #players
 
-        if lootGroup then
-            local max = 0
-
-            for _, entry in pairs(lootGroup) do
-                if type(entry) == 'table' then
-                    max = max + entry.weight
-                end
-            end
-
-            local quantity = lootGroup.quantity or 1
-
-            for j = 1, quantity do
-                local roll    = math.random(max)
-                local current = 0
-
-                for _, entry in pairs(lootGroup) do
-                    if type(entry) == 'table' then
-                        current = current + entry.weight
-
-                        if current >= roll then
-                            if entry.item == 0 then
-                                break
-                            end
-
-                            if entry.item == 65535 then
-                                local gil = entry.amount / #players
-
-                                for k = 1, #players, 1 do
-                                    npcUtil.giveCurrency(players[k], 'gil', gil)
-                                end
-
-                                break
-                            end
-
-                            players[1]:addTreasure(entry.item, npc)
-
-                            break
-                        end
-                    end
-                end
+            for _, player in ipairs(players) do
+                npcUtil.giveCurrency(player, 'gil', gilPerPlayer, true)
             end
         end
     end
@@ -1318,7 +1340,7 @@ end
 
 function xi.battlefield.rejectLevelSyncedParty(player, npc)
     for _, member in pairs(player:getAlliance()) do
-        if member:isLevelSync() then
+        if member:hasStatusEffect(xi.effect.LEVEL_SYNC) then
             local zoneId = player:getZoneID()
             local ID     = zones[zoneId]
 
@@ -1438,8 +1460,8 @@ function BattlefieldMission:onEventFinishWin(player, csid, option, npc)
     end
 
     -- Only grant mission XP once per JP midnight
-    if self.grantXP and self:getVar(player, 'XP') <= os.time() then
-        self:setVar(player, 'XP', getMidnight())
+    if self.grantXP and self:getVar(player, 'XP') <= GetSystemTime() then
+        self:setVar(player, 'XP', JstMidnight())
         player:addExp(self.grantXP)
     end
 end
@@ -1464,9 +1486,11 @@ function BattlefieldQuest:new(data)
     local obj = Battlefield:new(data)
     setmetatable(obj, self)
 
-    obj.questArea  = data.questArea
-    obj.quest      = data.quest
-    obj.canLoseExp = data.canLoseExp or false
+    obj.questArea     = data.questArea
+    obj.quest         = data.quest
+    obj.canLoseExp    = data.canLoseExp or false
+    obj.requiredVar   = data.requiredVar
+    obj.requiredValue = data.requiredValue
 
     return obj
 end

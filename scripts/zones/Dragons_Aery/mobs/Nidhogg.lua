@@ -8,29 +8,39 @@ mixins = { require('scripts/mixins/rage') }
 ---@type TMobEntity
 local entity = {}
 
+entity.onMobInitialize = function(mob)
+    mob:addImmunity(xi.immunity.TERROR)
+    mob:addImmunity(xi.immunity.PETRIFY)
+    mob:setMobMod(xi.mobMod.IDLE_DESPAWN, 90)
+end
+
 entity.onMobSpawn = function(mob)
     mob:setLocalVar('[rage]timer', 3600) -- 60 minutes
+    mob:setMobMod(xi.mobMod.GIL_MAX, -1) -- Does not drop gil.
     mob:setMobMod(xi.mobMod.NO_MOVE, 0)
-    mob:setMobMod(xi.mobMod.WEAPON_BONUS, 48) -- 140 total weapon damage
-    mob:setMod(xi.mod.ATT, 445)
+    mob:setMobMod(xi.mobMod.AOE_HIT_ALL, 1)
+    mob:setMobMod(xi.mobMod.BASE_DAMAGE_MODIFIER, 50) -- 140 total weapon damage
+    mob:setMod(xi.mod.ATT, 499) -- 560 Total Attack
     mob:setMod(xi.mod.ACC, 444)
     mob:setMod(xi.mod.EVA, 327)
-
+    mob:setMod(xi.mod.REGAIN, 100) -- Ability every 30 seconds below 25% HP
+    mob:setMod(xi.mod.REGEN, 20) -- 1% every 90s
+    mob:setMod(xi.mod.STUN_RES_RANK, 10)
     -- Despawn the ???
     GetNPCByID(ID.npc.FAFNIR_QM):setStatus(xi.status.DISAPPEAR)
 end
 
 entity.onMobFight = function(mob, target)
+    local hpp = mob:getHPP()
     local battletime = mob:getBattleTime()
     local twohourTime = mob:getLocalVar('twohourTime')
 
-    if twohourTime == 0 then
-        mob:setLocalVar('twohourTime', math.random(30, 90))
-    end
-
-    if battletime >= twohourTime then
-        mob:useMobAbility(1053) -- Legitimately captured super_buff ID
-        mob:setLocalVar('twohourTime', battletime + math.random(60, 120))
+    if twohourTime == 0 and hpp <= math.random(93, 94) then
+        mob:useMobAbility(xi.mobSkill.SUPER_BUFF)
+        mob:setLocalVar('twohourTime', battletime + math.random(31, 240))
+    elseif twohourTime > 0 and battletime >= twohourTime then
+        mob:useMobAbility(xi.mobSkill.SUPER_BUFF)
+        mob:setLocalVar('twohourTime', battletime + math.random(31, 240))
     end
 
     local drawInTable =
@@ -55,7 +65,9 @@ entity.onMobFight = function(mob, target)
 end
 
 entity.onMobDeath = function(mob, player, optParams)
-    player:addTitle(xi.title.NIDHOGG_SLAYER)
+    if player then
+        player:addTitle(xi.title.NIDHOGG_SLAYER)
+    end
 end
 
 entity.onMobDespawn = function(mob)

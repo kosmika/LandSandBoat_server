@@ -42,10 +42,10 @@ ConquestData::ConquestData()
         regionControls[regionId] = regionControl;
 
         influence_t influence{};
-        influence.sandoria_influence = rset->get<uint16>("sandoria_influence");
-        influence.bastok_influence   = rset->get<uint16>("bastok_influence");
-        influence.windurst_influence = rset->get<uint16>("windurst_influence");
-        influence.beastmen_influence = rset->get<uint16>("beastmen_influence");
+        influence.sandoria_influence = rset->get<int32>("sandoria_influence");
+        influence.bastok_influence   = rset->get<int32>("bastok_influence");
+        influence.windurst_influence = rset->get<int32>("windurst_influence");
+        influence.beastmen_influence = rset->get<int32>("beastmen_influence");
         influences[regionId]         = influence;
     }
 }
@@ -131,7 +131,7 @@ uint8 ConquestData::getPrevRegionControlCount(NATION_TYPE nation) const
     return count;
 }
 
-auto ConquestData::getRegionControls() -> std::vector<region_control_t> const
+auto ConquestData::getRegionControls() const -> const std::vector<region_control_t>&
 {
     return regionControls;
 }
@@ -167,7 +167,7 @@ void ConquestData::addInfluencePoints(int points, NATION_TYPE nation, REGION_TYP
     }
 }
 
-void ConquestData::updateInfluencePoints(std::vector<influence_t> const& influencePoints)
+void ConquestData::updateInfluencePoints(const std::vector<influence_t>& influencePoints)
 {
     influences.clear();
     for (const auto& influence : influencePoints)
@@ -176,7 +176,7 @@ void ConquestData::updateInfluencePoints(std::vector<influence_t> const& influen
     }
 }
 
-void ConquestData::updateRegionControls(std::vector<region_control_t> const& updatedRegionControls)
+void ConquestData::updateRegionControls(const std::vector<region_control_t>& updatedRegionControls)
 {
     regionControls.clear();
     for (const auto& regionControl : updatedRegionControls)

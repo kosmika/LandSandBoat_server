@@ -7,7 +7,15 @@ mixins = { require('scripts/mixins/job_special') }
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobDeath = function(mob, player, optParams)
+entity.onMobInitialize = function(mob)
+    xi.pet.setMobPet(mob, 1, 'Sahagins_Wyvern')
+
+    mob:setMobMod(xi.mobMod.GIL_MIN, 12000)
+    mob:setMobMod(xi.mobMod.GIL_MAX, 12000)
+end
+
+entity.onMobSpawn = function(mob)
+    mob:setMobMod(xi.mobMod.BASE_DAMAGE_MULTIPLIER, 150)
 end
 
 entity.onMobDespawn = function(mob)

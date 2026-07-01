@@ -23,186 +23,190 @@
 
 #include "char_update.h"
 
-#include "entities/charentity.h"
+#include "entities/char_entity.h"
+#include "items/item_linkshell.h"
 #include "status_effect_container.h"
 #include "utils/itemutils.h"
+#include "utils/mountutils.h"
 
 namespace
 {
-    // https://github.com/atom0s/XiPackets/tree/main/world/server/0x000D
 
-    // PS2: (Non-defined bitfield type.)
-    struct sendflags_t
-    {
-        uint8_t Position : 1;
-        uint8_t ClaimStatus : 1;
-        uint8_t General : 1;
-        uint8_t Name : 1;
-        uint8_t Model : 1;
-        uint8_t Despawn : 1;
-        uint8_t unused : 2;
-    };
+// https://github.com/atom0s/XiPackets/tree/main/world/server/0x000D
 
-    // PS2: (Unnamed bitfield struct.)
-    struct flags0_t
-    {
-        uint32_t MovTime : 13;    // PS2: MovTime
-        uint32_t RunMode : 1;     // PS2: RunMode
-        uint32_t unknown_1_6 : 1; // PS2: TargetMode
-        uint32_t GroundFlag : 1;  // PS2: GroundFlag
-        uint32_t KingFlag : 1;    // PS2: KingFlag
-        uint32_t facetarget : 15; // PS2: facetarget
-    };
+// PS2: (Non-defined bitfield type.)
+struct sendflags_t
+{
+    uint8_t Position : 1;
+    uint8_t ClaimStatus : 1;
+    uint8_t General : 1;
+    uint8_t Name : 1;
+    uint8_t Model : 1;
+    uint8_t Despawn : 1;
+    uint8_t unused : 2;
+};
 
-    // PS2: (Unnamed bitfield struct.)
-    struct flags1_t
-    {
-        uint32_t MonsterFlag : 1;     // PS2: MonsterFlag
-        uint32_t HideFlag : 1;        // PS2: HideFlag
-        uint32_t SleepFlag : 1;       // PS2: SleepFlag
-        uint32_t unknown_0_3 : 1;     // PS2: MonStat
-        uint32_t unknown_0_4 : 1;     // PS2: (unknown)
-        uint32_t ChocoboIndex : 3;    // PS2: ChocoboIndex
-        uint32_t CliPosInitFlag : 1;  // PS2: CliPosInitFlag
-        uint32_t GraphSize : 2;       // PS2: GraphSize
-        uint32_t LfgFlag : 1;         // PS2: LfgFlag
-        uint32_t AnonymousFlag : 1;   // PS2: AnonymousFlag
-        uint32_t YellFlag : 1;        // PS2: YellFlag
-        uint32_t AwayFlag : 1;        // PS2: AwayFlag
-        uint32_t Gender : 1;          // PS2: Gender
-        uint32_t PlayOnelineFlag : 1; // PS2: PlayOnelineFlag
-        uint32_t LinkShellFlag : 1;   // PS2: LinkShellFlag
-        uint32_t LinkDeadFlag : 1;    // PS2: LinkDeadFlag
-        uint32_t TargetOffFlag : 1;   // PS2: TargetOffFlag
-        uint32_t TalkUcoffFlag : 1;   // PS2: TalkUcoffFlag
-        uint32_t unknown_2_5 : 1;     // PS2: PartyLeaderFlg
-        uint32_t unknown_2_6 : 1;     // PS2: AllianceLeaderFlg
-        uint32_t unknown_2_7 : 1;     // PS2: DebugClientFlg
-        uint32_t GmLevel : 3;         // PS2: GmLevel
-        uint32_t HackMove : 1;        // PS2: HackMove
-        uint32_t unknown_3_4 : 1;     // PS2: GMInvisFlag
-        uint32_t InvisFlag : 1;       // PS2: InvisFlag
-        uint32_t TurnFlag : 1;        // PS2: TurnFlag
-        uint32_t BazaarFlag : 1;      // PS2: BazaarFlag
-    };
+// PS2: (Unnamed bitfield struct.)
+struct flags0_t
+{
+    uint32_t MovTime : 13;    // PS2: MovTime
+    uint32_t RunMode : 1;     // PS2: RunMode
+    uint32_t unknown_1_6 : 1; // PS2: TargetMode
+    uint32_t GroundFlag : 1;  // PS2: GroundFlag
+    uint32_t KingFlag : 1;    // PS2: KingFlag
+    uint32_t facetarget : 15; // PS2: facetarget
+};
 
-    // PS2: (Unnamed bitfield struct.)
-    struct flags2_t
-    {
-        uint32_t r : 8;             // PS2: r
-        uint32_t g : 8;             // PS2: g
-        uint32_t b : 8;             // PS2: b
-        uint32_t PvPFlag : 1;       // PS2: PvPFlag
-        uint32_t ShadowFlag : 1;    // PS2: ShadowFlag
-        uint32_t ShipStartMode : 1; // PS2: ShipStartMode
-        uint32_t CharmFlag : 1;     // PS2: CharmFlag
-        uint32_t GmIconFlag : 1;    // PS2: GmIconFlag
-        uint32_t NamedFlag : 1;     // PS2: NamedFlag
-        uint32_t SingleFlag : 1;    // PS2: SingleFlag
-        uint32_t AutoPartyFlag : 1; // PS2: AutoPartyFlag
-    };
+// PS2: (Unnamed bitfield struct.)
+struct flags1_t
+{
+    uint32_t MonsterFlag : 1;     // PS2: MonsterFlag
+    uint32_t HideFlag : 1;        // PS2: HideFlag
+    uint32_t SleepFlag : 1;       // PS2: SleepFlag
+    uint32_t unknown_0_3 : 1;     // PS2: MonStat
+    uint32_t unknown_0_4 : 1;     // PS2: (unknown)
+    uint32_t ChocoboIndex : 3;    // PS2: ChocoboIndex
+    uint32_t CliPosInitFlag : 1;  // PS2: CliPosInitFlag
+    uint32_t GraphSize : 2;       // PS2: GraphSize
+    uint32_t LfgFlag : 1;         // PS2: LfgFlag
+    uint32_t AnonymousFlag : 1;   // PS2: AnonymousFlag
+    uint32_t YellFlag : 1;        // PS2: YellFlag
+    uint32_t AwayFlag : 1;        // PS2: AwayFlag
+    uint32_t Gender : 1;          // PS2: Gender
+    uint32_t PlayOnelineFlag : 1; // PS2: PlayOnelineFlag
+    uint32_t LinkShellFlag : 1;   // PS2: LinkShellFlag
+    uint32_t LinkDeadFlag : 1;    // PS2: LinkDeadFlag
+    uint32_t TargetOffFlag : 1;   // PS2: TargetOffFlag
+    uint32_t TalkUcoffFlag : 1;   // PS2: TalkUcoffFlag
+    uint32_t unknown_2_5 : 1;     // PS2: PartyLeaderFlg
+    uint32_t unknown_2_6 : 1;     // PS2: AllianceLeaderFlg
+    uint32_t unknown_2_7 : 1;     // PS2: DebugClientFlg
+    uint32_t GmLevel : 3;         // PS2: GmLevel
+    uint32_t HackMove : 1;        // PS2: HackMove
+    uint32_t unknown_3_4 : 1;     // PS2: GMInvisFlag
+    uint32_t InvisFlag : 1;       // PS2: InvisFlag
+    uint32_t TurnFlag : 1;        // PS2: TurnFlag
+    uint32_t BazaarFlag : 1;      // PS2: BazaarFlag
+};
 
-    // PS2: (Unnamed bitfield struct. This has been fully repurposed.)
-    struct flags3_t
-    {
-        uint32_t TrustFlag : 1;        // PS2: (New; replaced 'PetMode'.)
-        uint32_t LfgMasterFlag : 1;    // PS2: (New; replaced 'PetMode'.)
-        uint32_t PetNewFlag : 1;       // PS2: PetNewFlag
-        uint32_t unknown_0_3 : 1;      // PS2: PetKillFlag
-        uint32_t MotStopFlag : 1;      // PS2: MotStopFlag
-        uint32_t CliPriorityFlag : 1;  // PS2: CliPriorityFlag
-        uint32_t PetFlag : 1;          // PS2: NpcPetFlag
-        uint32_t OcclusionoffFlag : 1; // PS2: OcclusionoffFlag
-        uint32_t BallistaTeam : 8;     // PS2: (New; did not exist.)
-        uint32_t MonStat : 3;          // PS2: (New; did not exist.)
-        uint32_t unknown_2_3 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_2_4 : 1;      // PS2: (New; did not exist.)
-        uint32_t SilenceFlag : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_2_6 : 1;      // PS2: (New; did not exist.)
-        uint32_t NewCharacterFlag : 1; // PS2: (New; did not exist.)
-        uint32_t MentorFlag : 1;       // PS2: (New; did not exist.)
-        uint32_t unknown_3_1 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_3_2 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_3_3 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_3_4 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_3_5 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_3_6 : 1;      // PS2: (New; did not exist.)
-        uint32_t unknown_3_7 : 1;      // PS2: (New; did not exist.)
-    };
+// PS2: (Unnamed bitfield struct.)
+struct flags2_t
+{
+    uint32_t r : 8;             // PS2: r
+    uint32_t g : 8;             // PS2: g
+    uint32_t b : 8;             // PS2: b
+    uint32_t PvPFlag : 1;       // PS2: PvPFlag
+    uint32_t ShadowFlag : 1;    // PS2: ShadowFlag
+    uint32_t ShipStartMode : 1; // PS2: ShipStartMode
+    uint32_t CharmFlag : 1;     // PS2: CharmFlag
+    uint32_t GmIconFlag : 1;    // PS2: GmIconFlag
+    uint32_t NamedFlag : 1;     // PS2: NamedFlag
+    uint32_t SingleFlag : 1;    // PS2: SingleFlag
+    uint32_t AutoPartyFlag : 1; // PS2: AutoPartyFlag
+};
 
-    // PS2: (New; did not exist.)
-    struct flags4_t
-    {
-        uint8_t unknown_0_0 : 1;   // PS2: (New; did not exist.)
-        uint8_t TrialFlag : 1;     // PS2: (New; did not exist.)
-        uint8_t unknown_0_2 : 2;   // PS2: (New; did not exist.)
-        uint8_t unknown_0_4 : 2;   // PS2: (New; did not exist.)
-        uint8_t JobMasterFlag : 1; // PS2: (New; did not exist.)
-        uint8_t unknown_0_7 : 1;   // PS2: (New; did not exist.)
-    };
+// PS2: (Unnamed bitfield struct. This has been fully repurposed.)
+struct flags3_t
+{
+    uint32_t TrustFlag : 1;        // PS2: (New; replaced 'PetMode'.)
+    uint32_t LfgMasterFlag : 1;    // PS2: (New; replaced 'PetMode'.)
+    uint32_t PetNewFlag : 1;       // PS2: PetNewFlag
+    uint32_t unknown_0_3 : 1;      // PS2: PetKillFlag
+    uint32_t MotStopFlag : 1;      // PS2: MotStopFlag
+    uint32_t CliPriorityFlag : 1;  // PS2: CliPriorityFlag
+    uint32_t PetFlag : 1;          // PS2: NpcPetFlag
+    uint32_t OcclusionoffFlag : 1; // PS2: OcclusionoffFlag
+    uint32_t BallistaTeam : 8;     // PS2: (New; did not exist.)
+    uint32_t MonStat : 3;          // PS2: (New; did not exist.)
+    uint32_t unknown_2_3 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_2_4 : 1;      // PS2: (New; did not exist.)
+    uint32_t SilenceFlag : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_2_6 : 1;      // PS2: (New; did not exist.)
+    uint32_t NewCharacterFlag : 1; // PS2: (New; did not exist.)
+    uint32_t MentorFlag : 1;       // PS2: (New; did not exist.)
+    uint32_t unknown_3_1 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_3_2 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_3_3 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_3_4 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_3_5 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_3_6 : 1;      // PS2: (New; did not exist.)
+    uint32_t unknown_3_7 : 1;      // PS2: (New; did not exist.)
+};
 
-    // PS2: (New; did not exist.)
-    struct flags5_t
-    {
-        uint8_t GeoIndiElement : 4; // PS2: (New; did not exist.)
-        uint8_t GeoIndiSize : 2;    // PS2: (New; did not exist.)
-        uint8_t GeoIndiFlag : 1;    // PS2: (New; did not exist.)
-        uint8_t unknown_0_7 : 1;    // PS2: (New; did not exist.)
-    };
+// PS2: (New; did not exist.)
+struct flags4_t
+{
+    uint8_t unknown_0_0 : 1;   // PS2: (New; did not exist.)
+    uint8_t TrialFlag : 1;     // PS2: (New; did not exist.)
+    uint8_t unknown_0_2 : 2;   // PS2: (New; did not exist.)
+    uint8_t unknown_0_4 : 2;   // PS2: (New; did not exist.)
+    uint8_t JobMasterFlag : 1; // PS2: (New; did not exist.)
+    uint8_t unknown_0_7 : 1;   // PS2: (New; did not exist.)
+};
 
-    // PS2: (New; did not exist.)
-    struct flags6_t
-    {
-        uint32_t GateId : 4;       // PS2: (New; did not exist.)
-        uint32_t MountIndex : 8;   // PS2: (New; did not exist.)
-        uint32_t unknown_1_3 : 20; // PS2: (New; did not exist.)
-    };
+// PS2: (New; did not exist.)
+struct flags5_t
+{
+    uint8_t GeoIndiElement : 4; // PS2: (New; did not exist.)
+    uint8_t GeoIndiSize : 2;    // PS2: (New; did not exist.)
+    uint8_t GeoIndiFlag : 1;    // PS2: (New; did not exist.)
+    uint8_t unknown_0_7 : 1;    // PS2: (New; did not exist.)
+};
 
-    // PS2: GP_SERV_CHAR_PC
-    struct GP_SERV_CHAR_PC
-    {
-        uint16_t id : 9;
-        uint16_t size : 7;
-        uint16_t sync;
+// PS2: (New; did not exist.)
+struct flags6_t
+{
+    uint32_t GateId : 4;       // PS2: (New; did not exist.)
+    uint32_t MountIndex : 8;   // PS2: (New; did not exist.)
+    uint32_t unknown_1_3 : 20; // PS2: (New; did not exist.)
+};
 
-        // PS2: GP_SERV_POS_HEAD
-        uint32_t    UniqueNo;      // PS2: UniqueNo
-        uint16_t    ActIndex;      // PS2: ActIndex
-        sendflags_t SendFlg;       // PS2: SendFlg
-        uint8_t     dir;           // PS2: dir
-        float       x;             // PS2: x
-        float       z;             // PS2: z
-        float       y;             // PS2: y
-        flags0_t    Flags0;        // PS2: <bits> (Nameless bitfield.)
-        uint8_t     Speed;         // PS2: Speed
-        uint8_t     SpeedBase;     // PS2: SpeedBase
-        uint8_t     Hpp;           // PS2: HpMax
-        uint8_t     server_status; // PS2: server_status
-        flags1_t    Flags1;        // PS2: <bits> (Nameless bitfield.)
-        flags2_t    Flags2;        // PS2: <bits> (Nameless bitfield.)
-        flags3_t    Flags3;        // PS2: <bits> (Nameless bitfield.)
-        uint32_t    BtTargetID;    // PS2: BtTargetID
+// PS2: GP_SERV_CHAR_PC
+struct GP_SERV_CHAR_PC
+{
+    uint16_t id : 9;
+    uint16_t size : 7;
+    uint16_t sync;
 
-        // PS2: GP_SERV_CHAR_PC remaining fields.
-        uint16_t CostumeId;           // PS2: (New; did not exist.)
-        uint8_t  BallistaInfo;        // PS2: (New; did not exist.)
-        flags4_t Flags4;              // PS2: (New; did not exist.)
-        uint32_t CustomProperties[2]; // PS2: (New; did not exist.)
-        uint16_t PetActIndex;         // PS2: (New; did not exist.)
-        uint16_t MonstrosityFlags;    // PS2: (New; did not exist.)
-        uint8_t  MonstrosityNameId1;  // PS2: (New; did not exist.)
-        uint8_t  MonstrosityNameId2;  // PS2: (New; did not exist.)
-        flags5_t Flags5;              // PS2: (New; did not exist.)
-        uint8_t  ModelHitboxSize;     // PS2: (New; did not exist.)
-        flags6_t Flags6;              // PS2: (New; did not exist.)
-        uint16_t GrapIDTbl[9];        // PS2: GrapIDTbl
-        uint8_t  name[16];            // PS2: name
-    };
+    // PS2: GP_SERV_POS_HEAD
+    uint32_t    UniqueNo;      // PS2: UniqueNo
+    uint16_t    ActIndex;      // PS2: ActIndex
+    sendflags_t SendFlg;       // PS2: SendFlg
+    uint8_t     dir;           // PS2: dir
+    float       x;             // PS2: x
+    float       z;             // PS2: z
+    float       y;             // PS2: y
+    flags0_t    Flags0;        // PS2: <bits> (Nameless bitfield.)
+    uint8_t     Speed;         // PS2: Speed
+    uint8_t     SpeedBase;     // PS2: SpeedBase
+    uint8_t     Hpp;           // PS2: HpMax
+    uint8_t     server_status; // PS2: server_status
+    flags1_t    Flags1;        // PS2: <bits> (Nameless bitfield.)
+    flags2_t    Flags2;        // PS2: <bits> (Nameless bitfield.)
+    flags3_t    Flags3;        // PS2: <bits> (Nameless bitfield.)
+    uint32_t    BtTargetID;    // PS2: BtTargetID
 
-    constexpr uint32_t nonspecific_size = offsetof(GP_SERV_CHAR_PC, MonstrosityFlags);
-    constexpr uint32_t general_size     = offsetof(GP_SERV_CHAR_PC, GrapIDTbl[0]);
-    constexpr uint32_t model_size       = offsetof(GP_SERV_CHAR_PC, name[0]);
-    constexpr uint32_t name_size        = offsetof(GP_SERV_CHAR_PC, name[0]);
+    // PS2: GP_SERV_CHAR_PC remaining fields.
+    uint16_t CostumeId;           // PS2: (New; did not exist.)
+    uint8_t  BallistaInfo;        // PS2: (New; did not exist.)
+    flags4_t Flags4;              // PS2: (New; did not exist.)
+    uint32_t CustomProperties[2]; // PS2: (New; did not exist.)
+    uint16_t PetActIndex;         // PS2: (New; did not exist.)
+    uint16_t MonstrosityFlags;    // PS2: (New; did not exist.)
+    uint8_t  MonstrosityNameId1;  // PS2: (New; did not exist.)
+    uint8_t  MonstrosityNameId2;  // PS2: (New; did not exist.)
+    flags5_t Flags5;              // PS2: (New; did not exist.)
+    uint8_t  ModelHitboxSize;     // PS2: (New; did not exist.)
+    flags6_t Flags6;              // PS2: (New; did not exist.)
+    uint16_t GrapIDTbl[9];        // PS2: GrapIDTbl
+    uint8_t  name[16];            // PS2: name
+};
+
+constexpr uint32_t nonspecific_size = offsetof(GP_SERV_CHAR_PC, MonstrosityFlags);
+constexpr uint32_t general_size     = offsetof(GP_SERV_CHAR_PC, GrapIDTbl[0]);
+constexpr uint32_t model_size       = offsetof(GP_SERV_CHAR_PC, name[0]);
+constexpr uint32_t name_size        = offsetof(GP_SERV_CHAR_PC, name[0]);
+
 } // namespace
 
 // This packet should only be constructed in CCharEntity::updateEntityPacket()!
@@ -274,22 +278,26 @@ void CCharUpdatePacket::updateWith(CCharEntity* PChar, ENTITYUPDATE type, uint8 
 
     if (packet->SendFlg.General)
     {
+        const auto [ChocoboIndex, CustomProperties] = mountutils::packetDefinition(PChar);
+
         packet->Hpp             = PChar->GetHPP();
         packet->server_status   = PChar->animation;
-        packet->ModelHitboxSize = 4; // TODO: verify this value and if it changes (Monstrosity?)
+        packet->ModelHitboxSize = static_cast<uint8_t>(PChar->modelHitboxSize * 10); // TODO: verify this value and if it changes (Monstrosity?)
 
         packet->Flags1.MonsterFlag = false; // TODO: Is this ever set for Monstrosity PVP?
-        packet->Flags1.HideFlag    = false;
+        packet->Flags1.HideFlag    = PChar->m_zoneInCutscene;
         packet->Flags1.SleepFlag   = 0;                                                                // Something to do with events. // TODO: figure out when/if this is set. Probably when you're in a cutscene?
         packet->Flags1.unknown_0_3 = PChar->loc.zone ? PChar->loc.zone->CanUseMisc(MISC_TREASURE) : 0; // Set global treasure pool
         packet->Flags1.unknown_0_4 = 0;
 
-        if (auto* effect = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_MOUNTED))
-        {
-            packet->Flags1.ChocoboIndex = effect->GetSubPower();
-        }
+        // All mounts need a valid ChocoboIndex
+        packet->Flags1.ChocoboIndex = ChocoboIndex;
+        // Only known to be used by Personal Chocobos at this time.
+        packet->CustomProperties[0] = CustomProperties[0];
+        // Only known to be used by Noble Chocobo at this time.
+        packet->CustomProperties[1] = CustomProperties[1];
 
-        CItemLinkshell* linkshell = (CItemLinkshell*)PChar->getEquip(SLOT_LINK1);
+        auto* linkshell = reinterpret_cast<CItemLinkshell*>(PChar->getEquip(SLOT_LINK1));
 
         packet->Flags1.CliPosInitFlag  = 0; // Unused
         packet->Flags1.GraphSize       = PChar->look.size;
@@ -305,13 +313,13 @@ void CCharUpdatePacket::updateWith(CCharEntity* PChar, ENTITYUPDATE type, uint8 
         packet->Flags1.TalkUcoffFlag   = 0; // Unknown, but used with events. // TOOD: verify how/when this is used.
         packet->Flags1.GmLevel         = PChar->visibleGmLevel;
         packet->Flags1.HackMove        = PChar->wallhackEnabled;
-        packet->Flags1.InvisFlag       = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffectByFlag(EFFECTFLAG_INVISIBLE);
+        packet->Flags1.InvisFlag       = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffectByFlag(xi::StatusEffectFlag::Invisible);
         packet->Flags1.TurnFlag        = 0; // I do not believe we currently use this. // TOOD: get the lerp values from retail somehow.
         packet->Flags1.BazaarFlag      = PChar->hasBazaar();
 
         if (linkshell && linkshell->isType(ITEM_LINKSHELL))
         {
-            lscolor_t LSColor = linkshell->GetLSColor();
+            const Exdata::lscolor_t LSColor = linkshell->GetLSColor();
 
             // This seems wrong, but displays correctly?
             packet->Flags2.r = (LSColor.R << 4) + 15;
@@ -330,12 +338,12 @@ void CCharUpdatePacket::updateWith(CCharEntity* PChar, ENTITYUPDATE type, uint8 
         packet->Flags3.TrustFlag        = 0;
         packet->Flags3.LfgMasterFlag    = 0; // Not implemented. This is LFP while job mastered when seeking a master party. (job master star next to inv icon)
         packet->Flags3.PetNewFlag       = 0;
-        packet->Flags3.MotStopFlag      = PChar->StatusEffectContainer->HasStatusEffect(EFFECT_TERROR);
+        packet->Flags3.MotStopFlag      = PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Terror);
         packet->Flags3.CliPriorityFlag  = PChar->priorityRender;
         packet->Flags3.PetFlag          = 0;
         packet->Flags3.BallistaTeam     = static_cast<uint8_t>(PChar->allegiance); // Also used during Ballista with slightly different values.
         packet->Flags3.MonStat          = 0;                                       // Some monstrosity flag. // TODO: verify if we already use this.
-        packet->Flags3.SilenceFlag      = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffect(EFFECT_SNEAK);
+        packet->Flags3.SilenceFlag      = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Sneak);
         packet->Flags3.NewCharacterFlag = !PChar->playerConfig.NewAdventurerOffFlg;
         packet->Flags3.MentorFlag       = PChar->playerConfig.MentorFlg;
 
@@ -344,26 +352,21 @@ void CCharUpdatePacket::updateWith(CCharEntity* PChar, ENTITYUPDATE type, uint8 
         packet->Flags5.GeoIndiElement = 0;
 
         // GEO bubble effects, changes bubble effect depending on what effect is activated.
-        if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_COLURE_ACTIVE))
+        if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::ColureActive))
         {
-            packet->Flags5.GeoIndiElement = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_COLURE_ACTIVE)->GetPower();
+            packet->Flags5.GeoIndiElement = PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::ColureActive)->GetPower();
             packet->Flags5.GeoIndiFlag    = 1;
         }
 
         // Size shouldn't change until the bubble is re-casted, but currently WIDENED COMPASS will widen the size of the bubble on the effect instantly, so this aligns with the code.
         // TODO: fix the discrepancy with retail.
-        if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_WIDENED_COMPASS))
+        if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::WidenedCompass))
         {
             packet->Flags5.GeoIndiSize = 2;
         }
 
         packet->Flags6.GateId = 0; // Set as "Confrontation" sub power? This will make other players invisible that dont also have this status.
-        if (PChar->StatusEffectContainer->GetStatusEffect(EFFECT_MOUNTED))
-        {
-            packet->Flags6.MountIndex = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_MOUNTED)->GetPower();
-        }
-
-        packet->size = roundUpToNearestFour(general_size) / 4;
+        packet->size          = roundUpToNearestFour(general_size) / 4;
     }
 
     if (packet->SendFlg.Model)
@@ -415,6 +418,13 @@ void CCharUpdatePacket::updateWith(CCharEntity* PChar, ENTITYUPDATE type, uint8 
         // For some reason, if you align the Name's null terminator on the edge of the packet, it cuts off the last character of the name.
         // Add 4 for this alignment issue, even if overkill sometimes.
         packet->size = roundUpToNearestFour(name_size + static_cast<uint32>(charNameSize) + 4) / 4;
+    }
+
+    if (packet->SendFlg.Despawn || packet->SendFlg.General)
+    {
+        // MountIndex is almost always set, even when character is no longer riding.
+        // The client needs it for characters that dismounted out of range, else they become invisible.
+        packet->Flags6.MountIndex = PChar->m_mountId;
     }
 
     // Fields that are always checked if this isnt a despawn packet

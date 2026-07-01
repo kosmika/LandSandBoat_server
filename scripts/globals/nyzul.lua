@@ -2,7 +2,6 @@
 -- Nyzul Isle Global
 -----------------------------------
 local ID = zones[xi.zone.NYZUL_ISLE]
-require('scripts/globals/utils')
 -----------------------------------
 xi = xi or {}
 xi.nyzul = xi.nyzul or {}
@@ -254,11 +253,17 @@ end
 
 xi.nyzul.specifiedEnemySet = function(mob)
     local instance = mob:getInstance()
+    local targetId = instance:getLocalVar('Nyzul_Specified_Enemy')
 
-    if instance:getStage() == xi.nyzul.objective.ELIMINATE_SPECIFIED_ENEMY then
-        if instance:getLocalVar('Nyzul_Specified_Enemy') == 0 then
-            mob:setMobMod(xi.mobMod.CHECK_AS_NM, 1)
-        end
+    -- Clear potential NM status from previous floor
+    mob:setMobMod(xi.mobMod.CHECK_AS_NM, 0)
+
+    if
+        instance:getStage() == xi.nyzul.objective.ELIMINATE_SPECIFIED_ENEMY and
+        targetId ~= 0 and
+        mob:getID() == targetId
+    then
+        mob:setMobMod(xi.mobMod.CHECK_AS_NM, 1)
     end
 end
 
@@ -298,6 +303,10 @@ xi.nyzul.activateRuneOfTransfer = function(instance)
 end
 
 xi.nyzul.vigilWeaponDrop = function(player, mob)
+    if not player then
+        return
+    end
+
     local instance = mob:getInstance()
 
     -- Only floor 100 Bosses to drop 1 random weapon guarenteed and 1 of the disk holders job
@@ -331,7 +340,7 @@ xi.nyzul.spawnChest = function(mob, player)
     -- NM chest spawn.
     if
         mobID >= ID.mob.NM_OFFSET and
-        mobID <= ID.mob.TAISAIJIN
+        mobID < ID.mob.GEAR_OFFSET
     then
         xi.nyzul.vigilWeaponDrop(player, mob)
 

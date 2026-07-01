@@ -1,4 +1,4 @@
-﻿/*
+/*
 ===========================================================================
 
   Copyright (c) 2022 LandSandBoat Dev Teams
@@ -21,10 +21,22 @@
 
 #pragma once
 
-#include <asio.hpp>
+#include "arguments.h"
+#include "common/engine.h"
+#include "common/scheduler.h"
+#include "common/zmq/zmq_service.h"
 
+#include <asio.hpp> // for signal_set
+
+#include <chrono>
 #include <memory>
 #include <string>
+
+struct ApplicationConfig
+{
+    std::string                     serverName;
+    std::vector<ArgumentDefinition> arguments{};
+};
 
 //
 // Forward declarations
@@ -40,7 +52,7 @@ class ConsoleService;
 class Application
 {
 public:
-    Application(std::string const& serverName, int argc, char** argv);
+    Application(const ApplicationConfig& appConfig, int argc, char** argv);
     virtual ~Application();
 
     Application(const Application&)            = delete;
@@ -54,41 +66,56 @@ public:
 
     void trySetConsoleTitle();
     void registerSignalHandlers();
-    void usercheck();
+    void handleSignal(const std::error_code& error, int signal);
+    void usercheck() const;
     void tryIncreaseRLimits();
-    void tryDisableQuickEditMode();
-    void tryRestoreQuickEditMode();
+    void tryDisableQuickEditMode() const;
+    void tryRestoreQuickEditMode() const;
     void prepareLogging();
 
-    virtual void loadConsoleCommands() = 0;
-
     void markLoaded();
+
+    //
+    // Derived customization
+    //
+
+    virtual auto createEngine() -> std::unique_ptr<Engine> = 0;
+    virtual void registerCommands(ConsoleService& console) {};
 
     //
     // Runtime
     //
 
-    bool isRunning();
-    void requestExit();
-
     // Is expected to block until requestExit() is called and/or isRunning() returns false
-    virtual void run() = 0;
+    virtual auto run() -> bool;
 
-    bool isRunningInCI();
+    void requestExit();
+    auto closeRequested() const -> bool;
+
+    auto isRunning() const -> bool;
+    auto isRunningInCI() const -> bool;
 
     //
     // Member accessors
     //
 
-    auto ioContext() -> asio::io_context&;
-    auto args() -> Arguments&;
-    auto console() -> ConsoleService&;
+    auto scheduler() -> Scheduler&;
+    auto zmqService() -> ZMQService&;
+    auto args() const -> Arguments&;
+    auto console() const -> ConsoleService&;
 
 protected:
-    asio::io_context io_context_;
+    std::chrono::steady_clock::time_point startTime_{ std::chrono::steady_clock::now() };
+
+    Scheduler scheduler_;
+
+    ZMQService zmqService_;
+
+    asio::signal_set signals_;
 
     std::string serverName_;
 
     std::unique_ptr<Arguments>      args_;
     std::unique_ptr<ConsoleService> consoleService_;
+    std::unique_ptr<Engine>         engine_;
 };

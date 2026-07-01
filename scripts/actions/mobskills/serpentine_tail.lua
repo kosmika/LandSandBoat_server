@@ -1,43 +1,32 @@
 -----------------------------------
---  Serpentine Tail
---
---  Description: Deals heavy damage to a target behind the user.
---  Type: Physical
---  2-3 Shadows
---  Range: Back
+-- Serpentine Tail
+-- Family: Hydra
+-- Description: Deals heavy damage to a target behind the user.
 -----------------------------------
 ---@type TMobSkill
 local mobskillObject = {}
 
 mobskillObject.onMobSkillCheck = function(target, mob, skill)
-    if mob:getFamily() == 316 then
-        local mobSkin = mob:getModelId()
-
-        if mobSkin == 1796 then
-            return 0
-        else
-            return 1
-        end
-    elseif mob:getFamily() == 313 then -- Tinnin
-        if mob:getAnimationSub() < 2 and target:isBehind(mob, 48) then
-            return 0
-        else
-            return 1
-        end
-    end
-
-    return 0
+    return target:isBehind(mob, 48) and 0 or 1
 end
 
-mobskillObject.onMobWeaponSkill = function(target, mob, skill)
-    local numhits = 1
-    local accmod = 1
-    local ftp    = 4.25 -- fTP and fTP scaling unknown. TODO: capture ftp
-    local info = xi.mobskills.mobPhysicalMove(mob, target, skill, numhits, accmod, ftp, xi.mobskills.physicalTpBonus.NO_EFFECT, 0, 0, 0)
-    local dmg = xi.mobskills.mobFinalAdjustments(info.dmg, mob, skill, target, xi.attackType.PHYSICAL, xi.damageType.SLASHING, xi.mobskills.shadowBehavior.NUMSHADOWS_3)
+mobskillObject.onMobWeaponSkill = function(mob, target, skill, action)
+    local params = {}
 
-    target:takeDamage(dmg, mob, xi.attackType.PHYSICAL, xi.damageType.SLASHING)
-    return dmg
+    params.baseDamage     = mob:getWeaponDmg()
+    params.numHits        = 1
+    params.fTP            = { 4.25, 4.25, 4.25 } -- TODO: Capture fTPs
+    params.attackType     = xi.attackType.PHYSICAL
+    params.damageType     = xi.damageType.BLUNT
+    params.shadowBehavior = xi.mobskills.shadowBehavior.NUMSHADOWS_3 -- TODO: Capture shadowBehavior
+
+    local info = xi.mobskills.mobPhysicalMove(mob, target, skill, action, params)
+
+    if xi.mobskills.processDamage(mob, target, skill, action, info) then
+        target:takeDamage(info.damage, mob, info.attackType, info.damageType)
+    end
+
+    return info.damage
 end
 
 return mobskillObject

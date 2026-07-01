@@ -6,15 +6,15 @@
 ---@type TItem
 local itemObject = {}
 
-itemObject.onItemCheck = function(target, item, param, caster)
+itemObject.onItemCheck = function(target, item, caster)
 end
 
 itemObject.onItemEquip = function(target, item)
-    target:addSpell(xi.magic.spell.IMPACT)
+    target:addSpell(xi.magic.spell.IMPACT, { silentLog = true, saveToDB = false })
 end
 
 itemObject.onItemUnequip = function(target, item)
-    target:delSpell(xi.magic.spell.IMPACT)
+    target:delSpell(xi.magic.spell.IMPACT, { saveToDB = false })
 end
 
 return itemObject

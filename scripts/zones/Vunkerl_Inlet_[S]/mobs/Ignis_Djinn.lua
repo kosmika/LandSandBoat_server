@@ -8,11 +8,8 @@ local ID = zones[xi.zone.VUNKERL_INLET_S]
 ---@type TMobEntity
 local entity = {}
 
-entity.onMobDeath = function(mob, player, optParams)
-end
-
 entity.onMobDespawn = function(mob)
-    xi.mob.phOnDespawn(mob, ID.mob.BIG_BANG_PH, 10, 3600) -- 1 hour
+    xi.mob.phOnDespawn(mob, ID.mob.BIG_BANG, 10, 3600) -- 1 hour
 end
 
 return entity

@@ -5,6 +5,7 @@
 local effectObject = {}
 
 effectObject.onEffectGain = function(target, effect)
+    target:delStatusEffect(xi.effect.REFRESH)
 end
 
 effectObject.onEffectTick = function(target, effect)
@@ -56,7 +57,7 @@ effectObject.onEffectTick = function(target, effect)
 
     if complete then
         target:delStatusEffectSilent(xi.effect.SUBLIMATION_ACTIVATED)
-        target:addStatusEffect(xi.effect.SUBLIMATION_COMPLETE, store, 0, 7200)
+        target:addStatusEffect(xi.effect.SUBLIMATION_COMPLETE, { power = store, duration = 7200, origin = target })
     else
         effect:setPower(store)
     end

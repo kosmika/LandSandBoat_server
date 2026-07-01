@@ -17,6 +17,12 @@ end
 
 zoneObject.onZoneIn = function(player, prevZone)
     local cs = -1
+    if
+        prevZone == xi.zone.MIDDLE_DELKFUTTS_TOWER or
+        prevZone == xi.zone.STELLAR_FULCRUM
+    then
+        cs = 14 -- Teleport.
+    end
 
     if
         player:getXPos() == 0 and
@@ -34,12 +40,12 @@ zoneObject.onTriggerAreaEnter = function(player, triggerArea)
     {
         [1] = function()
             --player:setCharVar('porter_lock', 1)
-            player:startEvent(0)
+            player:startOptionalCutscene(0, { cs_option = 0, canSkip = true })
         end,
 
         [2] = function()
             --player:setCharVar('porter_lock', 1)
-            player:startEvent(1)
+            player:startOptionalCutscene(1, { cs_option = 0, canSkip = true })
         end,
     }
 end

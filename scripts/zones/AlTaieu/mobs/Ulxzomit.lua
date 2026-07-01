@@ -24,6 +24,8 @@ entity.onMobSpawn = function(mob)
     -- Baby Ul'xzomit
     if mob:getMobMod(xi.mobMod.LEADER) < 0 then
         mob:setMobFlags(1153)
+        -- MNK mob but do not attack twice
+        mob:setMod(xi.mod.MARTIAL_ARTS, 0)
     end
 end
 
@@ -47,9 +49,6 @@ entity.onMobRoamAction = function(mob)
             return
         end
     end
-end
-
-entity.onMobDeath = function(mob, player, optParams)
 end
 
 return entity

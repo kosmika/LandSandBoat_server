@@ -1,8 +1,6 @@
 -----------------------------------
 -- Module helpers
 -----------------------------------
-require('scripts/globals/utils')
------------------------------------
 xi = xi or {}
 xi.module = xi.module or {}
 
@@ -45,6 +43,24 @@ xi.module.modifyInteractionEntry = function(filename, modifyFunc)
     InteractionGlobal.lookup:removeContainer(res) -- Remove the resource from the container
     modifyFunc(res) -- Run function to modify resource
     InteractionGlobal.lookup:addContainer(res) -- Re-add resource to container
+end
+
+xi.module.isContentEnabled = function(contentTag)
+    if contentTag == nil or contentTag == '' then
+        return true
+    end
+
+    if xi.settings == nil or xi.settings.main == nil then
+        return true
+    end
+
+    local isRestricted = xi.settings.main.RESTRICT_CONTENT == 1 or xi.settings.main.RESTRICT_CONTENT == true
+    if not isRestricted then
+        return true
+    end
+
+    local contentSetting = xi.settings.main['ENABLE_' .. contentTag]
+    return contentSetting == 1 or contentSetting == true
 end
 
 -- Override Object

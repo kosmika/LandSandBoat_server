@@ -7,9 +7,8 @@
 local entity = {}
 
 entity.onMobSpawn = function(mob)
-end
-
-entity.onMobDeath = function(mob, player, optParams)
+    mob:addImmunity(xi.immunity.DARK_SLEEP)
+    mob:addImmunity(xi.immunity.SILENCE)
 end
 
 return entity

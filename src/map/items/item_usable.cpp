@@ -21,72 +21,88 @@
 
 #include "item_usable.h"
 
-#include "common/utils.h"
 #include "common/vana_time.h"
-
-#include "map_server.h"
+#include "enums/action/animation.h"
+#include "exdata/timer_info.h"
 
 CItemUsable::CItemUsable(uint16 id)
 : CItem(id)
+, m_UseDelay(0s)
+, m_AnimationTime(0s)
+, m_ActivationTime(0s)
+, m_ReuseDelay(0s)
 {
     setType(ITEM_USABLE);
 
-    m_UseDelay       = 0;
-    m_MaxCharges     = 0;
-    m_Animation      = 0;
-    m_AnimationTime  = 0;
-    m_ActivationTime = 0;
-    m_ValidTarget    = 0;
-    m_ReuseDelay     = 0;
-    m_AssignTime     = 0;
-    m_AoE            = 0;
+    m_MaxCharges  = 0;
+    m_Animation   = 0;
+    m_ValidTarget = 0;
+    m_AssignTime  = timer::time_point{};
+    m_LastUseTime = timer::time_point{};
+    m_AoE         = 0;
+}
+
+CItemUsable::CItemUsable(const CItemUsable& other)
+: CItem(other)
+, m_UseDelay(other.m_UseDelay)
+, m_MaxCharges(other.m_MaxCharges)
+, m_Animation(other.m_Animation)
+, m_AnimationTime(other.m_AnimationTime)
+, m_ActivationTime(other.m_ActivationTime)
+, m_ValidTarget(other.m_ValidTarget)
+, m_ReuseDelay(other.m_ReuseDelay)
+, m_AssignTime(other.m_AssignTime)
+, m_LastUseTime(other.m_LastUseTime)
+, m_AoE(other.m_AoE)
+{
 }
 
 CItemUsable::~CItemUsable() = default;
 
-void CItemUsable::setUseDelay(uint8 UseDelay)
+void CItemUsable::setUseDelay(timer::duration UseDelay)
 {
     m_UseDelay = UseDelay;
 }
 
-uint8 CItemUsable::getUseDelay() const
+timer::duration CItemUsable::getUseDelay() const
 {
     return m_UseDelay;
 }
 
-void CItemUsable::setReuseDelay(uint32 ReuseDelay)
+void CItemUsable::setReuseDelay(timer::duration ReuseDelay)
 {
     m_ReuseDelay = ReuseDelay;
 }
 
-uint32 CItemUsable::getReuseDelay() const
+timer::duration CItemUsable::getReuseDelay() const
 {
     return m_ReuseDelay;
 }
 
-void CItemUsable::setLastUseTime(uint32 LastUseTime)
+void CItemUsable::setLastUseTime(timer::time_point LastUseTime)
 {
-    ref<uint32>(m_extra, 0x04) = LastUseTime;
+    m_LastUseTime                                    = LastUseTime;
+    this->exdata<Exdata::ItemTimerInfo>().TimeValue1 = earth_time::vanadiel_timestamp(timer::to_utc(LastUseTime));
 }
 
-uint32 CItemUsable::getLastUseTime()
+timer::time_point CItemUsable::getLastUseTime()
 {
-    return ref<uint32>(m_extra, 0x04);
+    return m_LastUseTime;
 }
 
-uint32 CItemUsable::getNextUseTime()
+timer::time_point CItemUsable::getNextUseTime()
 {
     return getLastUseTime() + m_ReuseDelay;
 }
 
 void CItemUsable::setCurrentCharges(uint8 CurrCharges)
 {
-    ref<uint8>(m_extra, 0x01) = std::clamp<uint8>(CurrCharges, 0, m_MaxCharges);
+    this->exdata<Exdata::ItemTimerInfo>().RemainingCharges = std::clamp<uint8>(CurrCharges, 0, m_MaxCharges);
 }
 
-uint8 CItemUsable::getCurrentCharges()
+auto CItemUsable::getCurrentCharges() const -> uint8
 {
-    return ref<uint8>(m_extra, 0x01);
+    return this->exdata<Exdata::ItemTimerInfo>().RemainingCharges;
 }
 
 void CItemUsable::setMaxCharges(uint8 MaxCharges)
@@ -104,27 +120,27 @@ void CItemUsable::setAnimationID(uint16 Animation)
     m_Animation = Animation;
 }
 
-uint16 CItemUsable::getAnimationID() const
+auto CItemUsable::getAnimationID() const -> ActionAnimation
 {
-    return m_Animation;
+    return static_cast<ActionAnimation>(m_Animation);
 }
 
-void CItemUsable::setAnimationTime(uint16 AnimationTime)
+void CItemUsable::setAnimationTime(timer::duration AnimationTime)
 {
     m_AnimationTime = AnimationTime;
 }
 
-uint16 CItemUsable::getAnimationTime() const
+timer::duration CItemUsable::getAnimationTime() const
 {
     return m_AnimationTime;
 }
 
-void CItemUsable::setActivationTime(uint16 ActivationTime)
+void CItemUsable::setActivationTime(timer::duration ActivationTime)
 {
     m_ActivationTime = ActivationTime;
 }
 
-uint16 CItemUsable::getActivationTime() const
+timer::duration CItemUsable::getActivationTime() const
 {
     return m_ActivationTime;
 }
@@ -149,15 +165,15 @@ void CItemUsable::setAoE(uint16 AoE)
     m_AoE = AoE;
 }
 
-void CItemUsable::setAssignTime(uint32 VanaTime)
+void CItemUsable::setAssignTime(timer::time_point time)
 {
-    m_AssignTime = VanaTime;
+    m_AssignTime = time;
 }
 
-uint32 CItemUsable::getReuseTime()
+timer::duration CItemUsable::getReuseTime()
 {
-    uint32 CurrentTime = CVanaTime::getInstance()->getVanaTime();
-    uint32 ReuseTime   = std::max(m_AssignTime + m_UseDelay, getLastUseTime() + m_ReuseDelay);
+    timer::time_point CurrentTime = timer::now();
+    auto              ReuseTime   = std::max<timer::time_point>(m_AssignTime + m_UseDelay, getLastUseTime() + m_ReuseDelay);
 
-    return (ReuseTime > CurrentTime ? (ReuseTime - CurrentTime) * 1000 : 0);
+    return (ReuseTime > CurrentTime ? ReuseTime - CurrentTime : 0s);
 }

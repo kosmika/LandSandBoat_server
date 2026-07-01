@@ -19,29 +19,41 @@
 ===========================================================================
 */
 
-#ifndef _CZONEENTITIES_H
-#define _CZONEENTITIES_H
+#pragma once
 
 #include "zone.h"
 
-#include "entities/baseentity.h"
-#include "entities/charentity.h"
-#include "entities/mobentity.h"
-#include "entities/npcentity.h"
-#include "entities/petentity.h"
-#include "entities/trustentity.h"
+#include "common/timer.h"
 
+#include "entities/base_entity.h"
+#include "entities/char_entity.h"
+#include "entities/mob_entity.h"
+#include "entities/npc_entity.h"
+#include "entities/pet_entity.h"
+#include "entities/trust_entity.h"
+#include "enums/music_slot.h"
+
+#include "spatial_grid.h"
+
+#include <functional>
 #include <set>
 #include <vector>
+
+// Per-entity callbacks used by the spawn-sync helpers.
+using EntityFn       = std::function<bool(CBaseEntity*)>; // visibility predicate
+using EntityCallback = std::function<void(CBaseEntity*)>; // action run on a newly-spawned entity
 
 class CZoneEntities
 {
 public:
-    CZoneEntities(CZone*);
+    CZoneEntities(Scheduler& scheduler, MapConfig config, CZone* zone);
     ~CZoneEntities();
 
     void HealAllMobs();
     void TryAddToNearbySpawnLists(CBaseEntity* PEntity);
+
+    void onEntityMoved(CBaseEntity* PEntity);
+    void onEntityDespawned(CBaseEntity* PEntity);
 
     CCharEntity* GetCharByName(const std::string& name); // finds the player if exists in zone
     CCharEntity* GetCharByID(uint32 id);
@@ -70,29 +82,31 @@ public:
     void InsertPET(CBaseEntity* PPet);
     void InsertTRUST(CBaseEntity* PTrust);
 
-    void FindPartyForMob(CBaseEntity* PEntity);         // looking for a party for the monster
-    void TransportDepart(uint16 boundary, uint16 zone); // ship/boat is leaving, passengers need to be collected
+    void FindPartyForMob(CBaseEntity* PEntity); // looking for a party for the monster
 
-    void TOTDChange(TIMETYPE TOTD); // process the world's reactions to changing time of day
-    void WeatherChange(WEATHER weather);
-    void MusicChange(uint16 BlockID, uint16 MusicTrackID);
+    void TransportDepart(uint16 boundary, uint16 prevZoneId, uint16 transportId); // ship/boat is leaving, passengers need to be collected
+
+    void TOTDChange(vanadiel_time::TOTD TOTD); // process the world's reactions to changing time of day
+    void WeatherChange(Weather weather);
+    void MusicChange(MusicSlot slotId, uint16 trackId);
 
     void PushPacket(CBaseEntity*, GLOBAL_MESSAGE_TYPE, const std::unique_ptr<CBasicPacket>&); // send a global package within the zone
 
-    void ZoneServer(time_point tick);
+    auto ZoneServer(timer::time_point tick) -> Task<void>;
 
     CZone* GetZone();
 
-    EntityList_t GetCharList() const;
-    EntityList_t GetMobList() const;
-    bool         CharListEmpty() const;
+    auto GetEffectCheckTime() const -> timer::time_point;
+    auto GetCharList() const -> const EntityList_t&;
+    auto GetMobList() const -> const EntityList_t&;
+    bool CharListEmpty() const;
 
-    void ForEachChar(std::function<void(CCharEntity*)> const& func);
-    void ForEachMob(std::function<void(CMobEntity*)> const& func);
-    void ForEachNpc(std::function<void(CNpcEntity*)> const& func);
-    void ForEachTrust(std::function<void(CTrustEntity*)> const& func);
-    void ForEachPet(std::function<void(CPetEntity*)> const& func);
-    void ForEachAlly(std::function<void(CMobEntity*)> const& func);
+    void ForEachChar(const std::function<void(CCharEntity*)>& func);
+    void ForEachMob(const std::function<void(CMobEntity*)>& func);
+    void ForEachNpc(const std::function<void(CNpcEntity*)>& func);
+    void ForEachTrust(const std::function<void(CTrustEntity*)>& func);
+    void ForEachPet(const std::function<void(CPetEntity*)>& func);
+    void ForEachAlly(const std::function<void(CMobEntity*)>& func);
 
     auto GetNewCharTargID() -> uint16;
     void AssignDynamicTargIDandLongID(CBaseEntity* PEntity);
@@ -100,6 +114,29 @@ public:
     auto GetUsedDynamicTargIDsCount() const -> std::size_t;
 
 private:
+    auto mobTick(CMobEntity* PMob, timer::time_point tick) -> Task<void>;
+    auto mobAggroCheck(CMobEntity* PMob, timer::time_point tick) -> Task<void>;
+    auto npcTick(CNpcEntity* PNpc, timer::time_point tick) -> Task<void>;
+    auto petTick(CPetEntity* PPet, timer::time_point tick) -> Task<void>;
+    auto trustTick(CTrustEntity* PTrust, timer::time_point tick) -> Task<void>;
+    auto charTick(CCharEntity* PChar, timer::time_point tick) -> Task<void>;
+
+    // aggro check when a mob becomes visible
+    void tapMobAggro(CCharEntity* PChar, CMobEntity* PCurrentMob);
+
+    // clear and re-file every entity into the grid
+    void rebuildSpatialGrid();
+
+    // Sync one of a player's spawn lists against the proximity grid: drop now-invisible entries, then
+    // add in-range visible ones from a 3x3 cell query. `visible` carries the precise status/vertical/
+    // distance checks; `onAdd` runs per newly-added entity (mob aggro). `alwaysInclude` is an optional
+    // set of entities that must be considered regardless of range (NPCs flagged alwaysRelevant, which
+    // a range query can't find) - each is run through `visible` like any other candidate.
+    void syncSpawnListWithGrid(CCharEntity* PChar, SpawnIDList_t& spawnList, uint8 objtype, uint8 spawnFlag, const EntityFn& visible, const EntityCallback& onAdd = {}, const EntityCallback& onUpdate = {}, const std::vector<CBaseEntity*>* alwaysInclude = nullptr);
+
+    Scheduler& scheduler_;
+    MapConfig  config_;
+
     CZone* m_zone;
 
     // NOTE: These are all keyed by targid
@@ -111,32 +148,34 @@ private:
     EntityList_t m_TransportList;
     EntityList_t m_charList;
 
+    SpatialGrid               spatialGrid_;        // proximity grid; rebuilt every tick (always on)
+    std::vector<uint32>       idsToRemoveScratch_; // reused scratch for grid spawn-list removals
+    std::vector<CBaseEntity*> alwaysRelevantNpcs_; // NPCs flagged alwaysRelevant; collected each rebuild, spawned regardless of range
+
+    std::vector<CBaseEntity*> tickEntityScratch_; // reusable snapshot of an entity list for a per-entity tick phase
+
     uint16           m_nextDynamicTargID; // The next dynamic targ ID to chosen -- SE rotates them forwards and skips entries that already exist.
     std::set<uint16> m_charTargIds;       // sorted set of targids for characters
     std::set<uint16> m_dynamicTargIds;    // sorted set of targids for dynamic entities
 
-    std::vector<std::pair<uint16, time_point>> m_dynamicTargIdsToDelete; // list of targids pending deletion at a later date
+    std::vector<std::pair<uint16, timer::time_point>> m_dynamicTargIdsToDelete; // list of targids pending deletion at a later date
 
-    time_point m_EffectCheckTime{ server_clock::now() };
+    timer::time_point m_EffectCheckTime{ timer::now() };
 
-    time_point m_computeTime{ server_clock::now() };
-    uint16     m_lastCharComputeTargId{ 0 };
+    timer::time_point m_computeTime{ timer::now() };
+    uint16            m_lastCharComputeTargId{ 0 };
 
-    time_point m_charPersistTime{ server_clock::now() };
-    uint16     m_lastCharPersistTargId{ 0 };
+    timer::time_point m_charPersistTime{ timer::now() };
+    uint16            m_lastCharPersistTargId{ 0 };
 
     //
     // Intermediate collections for use inside ZoneServer
     //
 
-    std::vector<CMobEntity*>   m_mobsToDelete;
-    std::vector<CNpcEntity*>   m_npcsToDelete;
-    std::vector<CPetEntity*>   m_petsToDelete;
-    std::vector<CTrustEntity*> m_trustsToDelete;
-    std::vector<CMobEntity*>   m_aggroableMobs;
-    std::vector<CCharEntity*>  m_charsToLogout;
-    std::vector<CCharEntity*>  m_charsToWarp;
-    std::vector<CCharEntity*>  m_charsToChangeZone;
+    std::vector<CMobEntity*>         m_mobsToDelete;
+    std::vector<CNpcEntity*>         m_npcsToDelete;
+    std::vector<CPetEntity*>         m_petsToDelete;
+    std::vector<CTrustEntity*>       m_trustsToDelete;
+    std::vector<CMobEntity*>         m_aggroableMobs;
+    std::unordered_set<CCharEntity*> m_charsToChangeZone;
 };
-
-#endif

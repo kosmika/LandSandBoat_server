@@ -17,6 +17,10 @@ xi.settings.map =
 
     MAX_TIME_LASTUPDATE = 60,
 
+    -- Per-zone player cap. 0 disables. GMs reserve the top GM_RESERVED slots.
+    ZONE_PLAYER_CAP         = 700,
+    ZONE_PLAYER_GM_RESERVED = 5,
+
     -- --------------------------------
     -- SQL settings
     -- --------------------------------
@@ -29,15 +33,19 @@ xi.settings.map =
     -- Game settings
     -- --------------------------------
 
-    -- PacketGuard will block and report any packets that aren't in the allow-list for a
-    -- player's current state.
-    PACKETGUARD_ENABLED = true,
-
     -- Minimal number of 0x3A packets which uses for detect lightluggage (set 0 for disable)
     LIGHTLUGGAGE_BLOCK = 4,
 
+    -- Enable or disable leaking item extdata to client when moving items out of an inventory container into another one
+    -- Retail leaks extdata on move, which is useful for edge cases such as weapon skill points
+    LEAK_EXT_DATA_ON_ITEM_MOVE = true,
+
     -- Enable or disable Recycle Bin (Set to false for items to be dropped immediately)
     ENABLE_ITEM_RECYCLE_BIN = true,
+
+    -- Self-unstuck feature (sends player to homepoint via Help Desk command)
+    SELF_UNSTUCK_ENABLED  = false,
+    SELF_UNSTUCK_COOLDOWN = 86400, -- Cooldown in seconds (default: 24 hours)
 
     -- AH fee structure, defaults are retail.
     AH_BASE_FEE_SINGLE = 1,
@@ -70,12 +78,6 @@ xi.settings.map =
     -- Capacity Point Settings
     CAPACITY_RATE = 1.0,
 
-    -- Determines Vana'diel time epoch (886/1/1 Firesday)
-    -- current timestamp - vanadiel_time_epoch = vana'diel time
-    -- 0 defaults to SE epoch 1009810800 (JP midnight 1/1/2002)
-    -- safe range is 1 - current timestamp
-    VANADIEL_TIME_EPOCH = 0,
-
     -- For old fame calculation use .25
     FAME_MULTIPLIER = 1.00,
 
@@ -98,12 +100,14 @@ xi.settings.map =
     -- Disables Treasure Hunter procs (Era behavior wants this true)
     DISABLE_TREASURE_HUNTER_PROCS = false,
 
-    -- Weaponskill point base (before skillchain) for breaking latent - whole numbers only. retail is 1.
-    WS_POINTS_BASE = 1,
+    -- Enable auto attack damage calculations in Lua
+    ENABLE_AUTO_ATTACK_LUA = false,
 
-    -- Weaponskill points per skillchain element - whole numbers only, retail is 1
-    -- (tier 3 sc's have 4 elements, plus 1 for the ws itself, giving 5 points to the closer).
-    WS_POINTS_SKILLCHAIN = 1,
+    -- Weaponskill point base (before skillchain) for breaking latent - whole numbers only. retail is 5.
+    WS_POINTS_BASE = 5,
+
+    -- Weaponskill points per skillchain level - whole numbers only, retail is 2
+    WS_POINTS_SKILLCHAIN = 2,
 
     -- Enable/disable jobs other than BST and RNG having widescan
     ALL_JOBS_WIDESCAN = true,
@@ -171,16 +175,14 @@ xi.settings.map =
     TRUST_TP_MULTIPLIER  = 1.0,
     FELLOW_TP_MULTIPLIER = 1.0,
 
-    -- Adjust max HP pool for NMs, regular mobs, players, and trusts/fellows. Acts as a multiplier, so default is 1.
+    -- Adjust max HP pool for NMs, regular mobs, players, and trusts/fellows. Acts as a multiplier, so default is 1. Valid range: 0.1 to 2.0
     NM_HP_MULTIPLIER        = 1.0,
     MOB_HP_MULTIPLIER       = 1.0,
-    PLAYER_HP_MULTIPLIER    = 1.0,
     ALTER_EGO_HP_MULTIPLIER = 1.0,
 
-    -- Adjust max MP pool for NMs, regular mobs, players, and trusts/fellows. Acts as a multiplier, so default is 1.
+    -- Adjust max MP pool for NMs, regular mobs, players, and trusts/fellows. Acts as a multiplier, so default is 1. Valid range: 0.1 to 2.0
     NM_MP_MULTIPLIER        = 1.0,
     MOB_MP_MULTIPLIER       = 1.0,
-    PLAYER_MP_MULTIPLIER    = 1.0,
     ALTER_EGO_MP_MULTIPLIER = 1.0,
 
     -- Sets the fraction of MP a subjob provides to the main job. Retail is half and this acts as a divisor so default is 2
@@ -196,10 +198,9 @@ xi.settings.map =
     -- Also adjust monsters subjob in ratio adjustments? 1 = true / 0 = false
     INCLUDE_MOB_SJ = false,
 
-    -- Adjust base stats (str/vit/etc.) for NMs, regular mobs, players, and trusts/fellows. Acts as a multiplier, so default is 1.
+    -- Adjust base stats (str/vit/etc.) for NMs, regular mobs, players, and trusts/fellows. Acts as a multiplier, so default is 1.0. Valid range: 0.1 to 2.0
     NM_STAT_MULTIPLIER        = 1.0,
     MOB_STAT_MULTIPLIER       = 1.0,
-    PLAYER_STAT_MULTIPLIER    = 1.0,
     ALTER_EGO_STAT_MULTIPLIER = 1.0,
 
     -- Adjust skill caps for trusts/fellows. Acts as a multiplier, so default is 1.
@@ -207,6 +208,9 @@ xi.settings.map =
 
     -- Adjust the recast time for abilities. Acts as a multiplier, so default is 1
     ABILITY_RECAST_MULTIPLIER = 1.0,
+
+    -- Maximum spell recast reduction percentage. Current retail is 80. Older eras used 50.
+    SPELL_RECAST_REDUCTION_CAP = 80,
 
     -- Enable/disable shared blood pact timer
     BLOOD_PACT_SHARED_TIMER = false,
@@ -231,9 +235,7 @@ xi.settings.map =
 
     -- Allows parry, block, and guard to skill up regardless of the action occuring.
     -- This did not happen in previous eras
-    PARRY_OLD_SKILLUP_STYLE = false,
-    BLOCK_OLD_SKILLUP_STYLE = false,
-    GUARD_OLD_SKILLUP_STYLE = false,
+    DEFENSIVE_OLD_SKILLUP_STYLE = false,
 
     -- Globally adjusts ALL battlefield level caps by this many levels.
     BATTLE_CAP_TWEAK = 0,
@@ -273,6 +275,9 @@ xi.settings.map =
     AUDIT_LINKSHELL = false,
     AUDIT_UNITY     = false,
     AUDIT_PARTY     = false,
+    AUDIT_BALLISTA  = false,
+    AUDIT_ASSISTE   = false,
+    AUDIT_ASSISTJ   = false,
 
     -- Player Item Transaction Logging (Default: Off)
     -- Logs player item transactions to the database for persistence.
@@ -280,6 +285,9 @@ xi.settings.map =
     AUDIT_PLAYER_BAZAAR = false,
     AUDIT_PLAYER_DBOX   = false,
     AUDIT_PLAYER_VENDOR = false,
+
+    -- Maximum number of in-flight items (slots) allowed in a player's delivery box for PC-to-PC transfers.
+    DELIVERY_BOX_MAX_INFLIGHT = 128,
 
     -- Seconds between healing ticks. Default is 10
     HEALING_TICK_DELAY = 10,

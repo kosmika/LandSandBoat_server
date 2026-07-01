@@ -205,6 +205,11 @@ local spawnCarby = function(carbyID, battlefield, content)
         )
 
         local enmityList = content.lastEnmityList[battlefield:getArea()]
+
+        -- reanable aggro and linking when spawning again
+        carby:setMobMod(xi.mobMod.NO_AGGRO, 0)
+        carby:setMobMod(xi.mobMod.NO_LINK, 0)
+
         -- if there is a saved enmityList and it is not empty
         if enmityList and next(enmityList) ~= nil then
             applyEnmity(carby, enmityList, battlefield)
@@ -218,6 +223,9 @@ local despawnCarby = function(mainCarby, battlefield, content)
     -- because need to disengage (which clears enmity list) to get correct despawn animation
     content.lastEnmityList[battlefield:getArea()] = mainCarby:getEnmityList()
     battlefield:setLocalVar('mainCarbyHP', mainCarby:getHP())
+    -- prevent from auto aggro or linking after disengaging
+    mainCarby:setMobMod(xi.mobMod.NO_AGGRO, 1)
+    mainCarby:setMobMod(xi.mobMod.NO_LINK, 1)
     -- disengage first to get the correct despawn animation
     mainCarby:disengage()
     -- set untargetable so player does not hit carby during despawn process
@@ -257,14 +265,14 @@ local checkCarbyTwoHour = function(mainCarbyID, battlefield)
                 (carby:isAlive() and carby:getHPP() < 10))
             then
                 triggerCoordTwoHour = true
-                battlefield:setLocalVar('lastCoordTwoHour', os.time())
+                battlefield:setLocalVar('lastCoordTwoHour', GetSystemTime())
                 break
             end
         end
     -- else check the 3 min timer
-    elseif os.time() > (lastCoorTwoHourTime + 180) then
+    elseif GetSystemTime() > (lastCoorTwoHourTime + 180) then
         triggerCoordTwoHour = true
-        battlefield:setLocalVar('lastCoordTwoHour', os.time())
+        battlefield:setLocalVar('lastCoordTwoHour', GetSystemTime())
     end
 
     if triggerCoordTwoHour then
@@ -301,14 +309,14 @@ local checkElementalAvatarTwoHour = function(mainCarbyID, battlefield, phase)
                 (avatar:isAlive() and avatar:getHPP() < 10))
             then
                 triggerCoordTwoHour = true
-                battlefield:setLocalVar('lastCoordTwoHour', os.time())
+                battlefield:setLocalVar('lastCoordTwoHour', GetSystemTime())
                 break
             end
         end
     -- else check the 3 min timer
-    elseif os.time() > (lastCoorTwoHourTime + 180) then
+    elseif GetSystemTime() > (lastCoorTwoHourTime + 180) then
         triggerCoordTwoHour = true
-        battlefield:setLocalVar('lastCoordTwoHour', os.time())
+        battlefield:setLocalVar('lastCoordTwoHour', GetSystemTime())
     end
 
     if triggerCoordTwoHour then
@@ -339,7 +347,7 @@ local content = BattlefieldQuest:new({
     quest     = xi.quest.id.otherAreas.WAKING_THE_BEAST,
 })
 
--- unclear if this is correct or if all players need the quest items
+-- can help if you are doing the quest or already completed the quest
 function content:entryRequirement(player, npc, isRegistrant, trade)
     local hasQuestItems = player:hasKeyItem(xi.ki.EYE_OF_FLAMES) and player:hasKeyItem(xi.ki.EYE_OF_FROST) and
     player:hasKeyItem(xi.ki.EYE_OF_GALES) and player:hasKeyItem(xi.ki.EYE_OF_STORMS) and
@@ -387,7 +395,7 @@ end
 local setBattlefieldLocalVarsForPhase = function(battlefield, phase, numToSpawn, typeToSpawn)
     battlefield:setLocalVar('phase', phase)
     -- set up an avatar spawn in 5 seconds
-    battlefield:setLocalVar('spawnTriggerTime', os.time() + 5)
+    battlefield:setLocalVar('spawnTriggerTime', GetSystemTime() + 5)
     battlefield:setLocalVar('numToSpawn', numToSpawn)
     battlefield:setLocalVar('typeToSpawn', typeToSpawn)
     battlefield:setLocalVar('lastCoordTwoHour', 0)
@@ -419,7 +427,7 @@ function content:onBattlefieldTick(battlefield, tick)
     -- the trigger time is set in the phase transition code
     if battlefield:getLocalVar('spawnTriggerTime') > 0 then
         -- if there is a pending spawning then check if time to spawn or need to wait
-        if os.time() > battlefield:getLocalVar('spawnTriggerTime') then
+        if GetSystemTime() > battlefield:getLocalVar('spawnTriggerTime') then
             local numToSpawn = battlefield:getLocalVar('numToSpawn')
 
             if

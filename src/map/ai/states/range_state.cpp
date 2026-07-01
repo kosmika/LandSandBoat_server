@@ -21,11 +21,15 @@
 
 #include "range_state.h"
 
+#include "action/action.h"
+#include "action/interrupts.h"
 #include "ai/ai_container.h"
-#include "entities/charentity.h"
-#include "entities/trustentity.h"
+#include "entities/char_entity.h"
+#include "entities/trust_entity.h"
+#include "enums/action/category.h"
 #include "items/item_weapon.h"
-#include "packets/action.h"
+#include "packets/s2c/0x028_battle2.h"
+#include "packets/s2c/0x029_battle_message.h"
 #include "status_effect_container.h"
 #include "utils/battleutils.h"
 #include "utils/charutils.h"
@@ -60,9 +64,9 @@ CRangeState::CRangeState(CBattleEntity* PEntity, uint16 targid)
         }
     }
 
-    if (distance(m_PEntity->loc.p, PTarget->loc.p) > 25)
+    if (distance(m_PEntity->loc.p, PTarget->loc.p) > m_PEntity->GetRangedAttackRange())
     {
-        m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, PTarget, 0, 0, MSGBASIC_TOO_FAR_AWAY);
+        m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, PTarget, 0, 0, MsgBasic::TooFarAway);
         throw CStateInitException(m_errorMsg->copy());
     }
 
@@ -95,29 +99,45 @@ CRangeState::CRangeState(CBattleEntity* PEntity, uint16 targid)
                     // reduce delay by 2-50%
                     // https://www.bg-wiki.com/ffxi/Rapid_Shot
                     // https://www.ffxiah.com/forum/topic/49806/ranger-firing-range-testing/4/#3233650
-                    delay       = (int16)(delay * (1.f - xirand::GetRandomNumber<uint16>(2, 50) / 100.f));
+                    delay       = (int16)(delay * (1.0f - xirand::GetRandomNumber<uint16>(2, 50) / 100.0f));
                     m_rapidShot = true;
                 }
             }
         }
     }
 
+    if (m_PEntity->objtype == TYPE_MOB)
+    {
+        // Mobs have different delay returns for pulling out their weapon
+        m_returnWeaponDelay = 2850ms;
+
+        if (distance(m_PEntity->loc.p, PTarget->loc.p) <= m_PEntity->GetMeleeRange(PTarget))
+        {
+            m_freePhaseTime = 6500ms + std::chrono::milliseconds(xirand::GetRandomNumber(0, 1500)); // Seems to have a random factor on to when it can shoot next. 1 or 2 melee auto attacks
+        }
+    }
+
     m_aimTime  = std::chrono::milliseconds(delay);
     m_startPos = m_PEntity->loc.p;
 
-    action_t action;
-    action.id         = m_PEntity->id;
-    action.actiontype = ACTION_RANGED_START;
-
-    actionList_t& actionList  = action.getNewActionList();
-    actionList.ActionTargetID = PTarget->id;
-
-    actionTarget_t& actionTarget = actionList.getNewActionTarget();
-    actionTarget.animation       = ANIMATION_RANGED;
+    action_t action{
+        .actorId    = m_PEntity->id,
+        .actiontype = ActionCategory::RangedStart,
+        .actionid   = static_cast<uint32_t>(FourCC::RangedStart),
+        .targets    = {
+            {
+                .actorId = m_PEntity->id,
+                .results = {
+                    {
+                        // Empty result
+                    },
+                },
+            },
+        },
+    };
 
     m_PEntity->PAI->EventHandler.triggerListener("RANGE_START", m_PEntity, &action);
-
-    m_PEntity->loc.zone->PushPacket(m_PEntity, CHAR_INRANGE_SELF, std::make_unique<CActionPacket>(action));
+    m_PEntity->loc.zone->PushPacket(m_PEntity, CHAR_INRANGE_SELF, std::make_unique<GP_SERV_COMMAND_BATTLE2>(action));
 }
 
 void CRangeState::SpendCost()
@@ -129,46 +149,47 @@ bool CRangeState::CanChangeState()
     return false;
 }
 
-bool CRangeState::Update(time_point tick)
+bool CRangeState::Update(timer::time_point tick)
 {
     if (m_PEntity && m_PEntity->isAlive() && (tick > GetEntryTime() + m_aimTime && !IsCompleted()))
     {
         auto* PTarget = m_PEntity->IsValidTarget(m_targid, TARGET_ENEMY, m_errorMsg);
 
         CanUseRangedAttack(PTarget, true);
+
         if (HasMoved())
         {
-            m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, m_PEntity, 0, 0, MSGBASIC_MOVE_AND_INTERRUPT);
+            m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, m_PEntity, 0, 0, MsgBasic::MoveAndInterrupt);
         }
 
-        action_t action;
-        auto*    cast_errorMsg = dynamic_cast<CMessageBasicPacket*>(m_errorMsg.get());
-        if (m_errorMsg && (!cast_errorMsg || cast_errorMsg->getMessageID() != MSGBASIC_CANNOT_SEE))
+        action_t action{};
+        auto*    cast_errorMsg = dynamic_cast<GP_SERV_COMMAND_BATTLE_MESSAGE*>(m_errorMsg.get());
+        if (m_errorMsg && (!cast_errorMsg || cast_errorMsg->getMessageId() != MsgBasic::CannotSee))
         {
-            action.id         = m_PEntity->id;
-            action.actiontype = ACTION_RANGED_INTERRUPT;
-
-            actionList_t& actionList  = action.getNewActionList();
-            actionList.ActionTargetID = PTarget ? PTarget->id : m_PEntity->id;
-
-            actionTarget_t& actionTarget = actionList.getNewActionTarget();
-            actionTarget.animation       = ANIMATION_RANGED;
-
             if (auto* PChar = dynamic_cast<CCharEntity*>(m_PEntity))
             {
                 PChar->pushPacket(m_errorMsg->copy());
             }
             // reset aim time so interrupted players only have to wait the correct 2.7s until next shot
-            m_aimTime = std::chrono::seconds(0);
-            m_PEntity->loc.zone->PushPacket(m_PEntity, CHAR_INRANGE_SELF, std::make_unique<CActionPacket>(action));
+            m_aimTime = 0s;
+            ActionInterrupts::RangedInterrupt(m_PEntity);
             m_PEntity->PAI->EventHandler.triggerListener("RANGE_STATE_EXIT", m_PEntity, nullptr, &action);
         }
         else
         {
             m_errorMsg.reset();
 
+            if (!PTarget || distance(m_PEntity->loc.p, PTarget->loc.p) > m_PEntity->GetRangedAttackRange())
+            {
+                m_isOutOfRange = true;
+            }
+
             m_PEntity->OnRangedAttack(*this, action);
-            m_PEntity->loc.zone->PushPacket(m_PEntity, CHAR_INRANGE_SELF, std::make_unique<CActionPacket>(action));
+            // Only send packet if action was populated (e.g. interrupts return early)
+            if (!action.targets.empty())
+            {
+                m_PEntity->loc.zone->PushPacket(m_PEntity, CHAR_INRANGE_SELF, std::make_unique<GP_SERV_COMMAND_BATTLE2>(action));
+            }
             m_PEntity->PAI->EventHandler.triggerListener("RANGE_STATE_EXIT", m_PEntity, PTarget, &action);
         }
 
@@ -181,13 +202,17 @@ bool CRangeState::Update(time_point tick)
         {
             PChar->m_LastRangedAttackTime = GetEntryTime() + m_aimTime + m_returnWeaponDelay;
         }
+        else if (auto* PMob = dynamic_cast<CMobEntity*>(m_PEntity))
+        {
+            PMob->m_LastRangedAttackTime = GetEntryTime() + m_aimTime + m_freePhaseTime;
+        }
         return true;
     }
 
     return false;
 }
 
-void CRangeState::Cleanup(time_point tick)
+void CRangeState::Cleanup(timer::time_point tick)
 {
 }
 
@@ -195,7 +220,7 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
 {
     if (!PTarget)
     {
-        m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, m_PEntity, 0, 0, MSGBASIC_CANNOT_ATTACK_TARGET);
+        m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, m_PEntity, 0, 0, MsgBasic::CannotAttackTarget);
         return false;
     }
 
@@ -206,7 +231,7 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
 
         if (!((PRanged && PRanged->isType(ITEM_WEAPON)) || (PAmmo && PAmmo->isThrowing())))
         {
-            m_errorMsg = std::make_unique<CMessageBasicPacket>(PChar, PChar, 0, 0, MSGBASIC_NO_RANGED_WEAPON);
+            m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(PChar, PChar, 0, 0, MsgBasic::NoRangedWeapon);
             return false;
         }
 
@@ -217,7 +242,7 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
             case SKILL_THROWING:
             {
                 // remove barrage, doesn't work here
-                PChar->StatusEffectContainer->DelStatusEffect(EFFECT_BARRAGE);
+                PChar->StatusEffectContainer->DelStatusEffect(xi::StatusEffect::Barrage);
                 break;
             }
             case SKILL_ARCHERY:
@@ -230,13 +255,13 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
                 }
                 else
                 {
-                    m_errorMsg = std::make_unique<CMessageBasicPacket>(PChar, PChar, 0, 0, MSGBASIC_NO_RANGED_WEAPON);
+                    m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(PChar, PChar, 0, 0, MsgBasic::NoRangedWeapon);
                     return false;
                 }
             }
             default:
             {
-                m_errorMsg = std::make_unique<CMessageBasicPacket>(PChar, PChar, 0, 0, MSGBASIC_NO_RANGED_WEAPON);
+                m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(PChar, PChar, 0, 0, MsgBasic::NoRangedWeapon);
                 return false;
             }
         }
@@ -244,13 +269,13 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
 
     if (!facing(m_PEntity->loc.p, PTarget->loc.p, 64))
     {
-        m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, PTarget, 0, 0, MSGBASIC_CANNOT_SEE);
+        m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, PTarget, 0, 0, MsgBasic::CannotSee);
         return false;
     }
 
-    if (!isEndOfAttack && !m_PEntity->CanSeeTarget(PTarget, false))
+    if (!isEndOfAttack && !m_PEntity->CanSeeTarget(PTarget))
     {
-        m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, PTarget, 0, 0, MSGBASIC_CANNOT_PERFORM_ACTION);
+        m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, PTarget, 0, 0, MsgBasic::CannotPerformAction);
         return false;
     }
 
@@ -259,7 +284,7 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
     {
         if (m_PEntity->PAI->getTick() - PChar->m_LastRangedAttackTime < m_freePhaseTime)
         {
-            m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, PTarget, 0, 0, MSGBASIC_WAIT_LONGER);
+            m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, PTarget, 0, 0, MsgBasic::WaitLonger);
             return false;
         }
     }
@@ -267,7 +292,7 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
     uint8 anim = m_PEntity->animation;
     if (anim != ANIMATION_NONE && anim != ANIMATION_ATTACK)
     {
-        m_errorMsg = std::make_unique<CMessageBasicPacket>(m_PEntity, PTarget, 0, 0, MSGBASIC_CANNOT_PERFORM_ACTION);
+        m_errorMsg = std::make_unique<GP_SERV_COMMAND_BATTLE_MESSAGE>(m_PEntity, PTarget, 0, 0, MsgBasic::CannotPerformAction);
         return false;
     }
 
@@ -276,7 +301,12 @@ bool CRangeState::CanUseRangedAttack(CBattleEntity* PTarget, bool isEndOfAttack)
 
 bool CRangeState::HasMoved()
 {
-    return floorf(m_startPos.x * 10 + 0.5f) / 10 != floorf(m_PEntity->loc.p.x * 10 + 0.5f) / 10 ||
-           floorf(m_startPos.y * 10 + 0.5f) / 10 != floorf(m_PEntity->loc.p.y * 10 + 0.5f) / 10 ||
-           floorf(m_startPos.z * 10 + 0.5f) / 10 != floorf(m_PEntity->loc.p.z * 10 + 0.5f) / 10;
+    if (m_PEntity->objtype != TYPE_PC)
+    {
+        return false;
+    }
+
+    float charDistance = distance(m_startPos, m_PEntity->loc.p, true);
+
+    return charDistance > 0.3;
 }

@@ -40,7 +40,7 @@ CLuaStatusEffect::CLuaStatusEffect(CStatusEffect* StatusEffect)
 
 uint32 CLuaStatusEffect::getEffectType()
 {
-    return m_PLuaStatusEffect->GetStatusID();
+    return static_cast<uint32>(m_PLuaStatusEffect->GetStatusID());
 }
 
 //======================================================//
@@ -67,18 +67,23 @@ uint16 CLuaStatusEffect::getTier()
     return m_PLuaStatusEffect->GetTier();
 }
 
+uint8 CLuaStatusEffect::getEffectSlot()
+{
+    return m_PLuaStatusEffect->GetEffectSlot();
+}
+
 //======================================================//
 
 uint32 CLuaStatusEffect::getDuration()
 {
-    return m_PLuaStatusEffect->GetDuration() / 1000;
+    return static_cast<uint32>(timer::count_milliseconds(m_PLuaStatusEffect->GetDuration()));
 }
 
 //======================================================//
 
 uint32 CLuaStatusEffect::getStartTime()
 {
-    return (uint32)std::chrono::duration_cast<std::chrono::milliseconds>(m_PLuaStatusEffect->GetStartTime() - get_server_start_time()).count();
+    return earth_time::timestamp(timer::to_utc(m_PLuaStatusEffect->GetStartTime()));
 }
 
 /************************************************************************
@@ -91,9 +96,9 @@ uint32 CLuaStatusEffect::getLastTick()
 {
     uint32 total = 0;
 
-    if (m_PLuaStatusEffect->GetTickTime() != 0)
+    if (m_PLuaStatusEffect->GetTickTime() != 0s)
     {
-        uint32 total_ticks   = m_PLuaStatusEffect->GetDuration() / m_PLuaStatusEffect->GetTickTime();
+        uint32 total_ticks   = static_cast<uint32>(m_PLuaStatusEffect->GetDuration() / m_PLuaStatusEffect->GetTickTime());
         uint32 elapsed_ticks = m_PLuaStatusEffect->GetElapsedTickCount();
         total                = total_ticks - elapsed_ticks;
     }
@@ -110,10 +115,10 @@ uint32 CLuaStatusEffect::getLastTick()
 uint32 CLuaStatusEffect::getTimeRemaining()
 {
     uint32 remaining = 0;
-    if (m_PLuaStatusEffect->GetDuration() > 0)
+    if (m_PLuaStatusEffect->GetDuration() > 0s)
     {
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(server_clock::now() - m_PLuaStatusEffect->GetStartTime()).count();
-        remaining     = (uint32)std::max(m_PLuaStatusEffect->GetDuration() - duration, std::chrono::seconds::rep{});
+        auto duration = m_PLuaStatusEffect->GetStartTime() - timer::now() + m_PLuaStatusEffect->GetDuration();
+        remaining     = static_cast<uint32>(std::max<int64>(timer::count_milliseconds(duration), 0));
     }
 
     return remaining;
@@ -132,7 +137,7 @@ uint32 CLuaStatusEffect::getTickCount()
 
 uint32 CLuaStatusEffect::getTick()
 {
-    return m_PLuaStatusEffect->GetTickTime();
+    return static_cast<uint32>(timer::count_milliseconds(m_PLuaStatusEffect->GetTickTime()));
 }
 
 //======================================================//
@@ -144,7 +149,7 @@ void CLuaStatusEffect::setIcon(uint16 icon)
 
 //======================================================//
 
-void CLuaStatusEffect::setSource(EffectSourceType sourceType, uint16 sourceTypeParam)
+void CLuaStatusEffect::setSource(EffectSourceType sourceType, uint32 sourceTypeParam)
 {
     m_PLuaStatusEffect->SetSource(sourceType, sourceTypeParam);
 }
@@ -159,21 +164,45 @@ void CLuaStatusEffect::setSubPower(uint16 subpower)
     m_PLuaStatusEffect->SetSubPower(subpower);
 }
 
+/************************************************************************
+ *                                                                      *
+ * Sets the icon used by the sub effect of auras etc                    *
+ * Will default to the main icon if not set                             *
+ *                                                                      *
+ ************************************************************************/
+
+void CLuaStatusEffect::setSubIcon(uint16 subIcon)
+{
+    m_PLuaStatusEffect->SetSubIcon(subIcon);
+}
+
+//======================================================//
+
 void CLuaStatusEffect::setTier(uint16 tier)
 {
     m_PLuaStatusEffect->SetTier(tier);
+}
+
+void CLuaStatusEffect::setEffectSlot(uint8 slot)
+{
+    m_PLuaStatusEffect->SetEffectSlot(slot);
+}
+
+auto CLuaStatusEffect::setOriginID(uint32 originid) -> void
+{
+    m_PLuaStatusEffect->SetOriginID(originid);
 }
 
 //======================================================//
 
 void CLuaStatusEffect::setDuration(uint32 duration)
 {
-    m_PLuaStatusEffect->SetDuration(duration);
+    m_PLuaStatusEffect->SetDuration(std::chrono::milliseconds(duration));
 }
 
 void CLuaStatusEffect::setTick(uint32 tick)
 {
-    m_PLuaStatusEffect->SetTickTime(tick);
+    m_PLuaStatusEffect->SetTickTime(std::chrono::milliseconds(tick));
 }
 
 /************************************************************************
@@ -184,12 +213,12 @@ void CLuaStatusEffect::setTick(uint32 tick)
 
 void CLuaStatusEffect::resetStartTime()
 {
-    m_PLuaStatusEffect->SetStartTime(server_clock::now());
+    m_PLuaStatusEffect->SetStartTime(timer::now());
 }
 
 void CLuaStatusEffect::setStartTime(uint32 time)
 {
-    m_PLuaStatusEffect->SetStartTime(get_server_start_time() + std::chrono::milliseconds(time));
+    m_PLuaStatusEffect->SetStartTime(timer::from_utc(earth_time::time_point(std::chrono::seconds(time))));
 }
 
 //======================================================//
@@ -203,27 +232,27 @@ void CLuaStatusEffect::addMod(uint16 mod, int16 amount)
 
 uint32 CLuaStatusEffect::getEffectFlags()
 {
-    return m_PLuaStatusEffect->GetEffectFlags();
+    return static_cast<uint32>(m_PLuaStatusEffect->GetEffectFlags());
 }
 
 void CLuaStatusEffect::setEffectFlags(uint32 flags)
 {
-    m_PLuaStatusEffect->SetEffectFlags(flags);
+    m_PLuaStatusEffect->SetEffectFlags(static_cast<xi::StatusEffectFlag>(flags));
 }
 
 void CLuaStatusEffect::addEffectFlag(uint32 flag)
 {
-    m_PLuaStatusEffect->AddEffectFlag(flag);
+    m_PLuaStatusEffect->AddEffectFlag(static_cast<xi::StatusEffectFlag>(flag));
 }
 
 void CLuaStatusEffect::delEffectFlag(uint32 flag)
 {
-    m_PLuaStatusEffect->DelEffectFlag(flag);
+    m_PLuaStatusEffect->DelEffectFlag(static_cast<xi::StatusEffectFlag>(flag));
 }
 
 bool CLuaStatusEffect::hasEffectFlag(uint32 flag)
 {
-    return m_PLuaStatusEffect->HasEffectFlag(flag);
+    return m_PLuaStatusEffect->HasEffectFlag(static_cast<xi::StatusEffectFlag>(flag));
 }
 
 uint16 CLuaStatusEffect::getIcon()
@@ -231,14 +260,24 @@ uint16 CLuaStatusEffect::getIcon()
     return m_PLuaStatusEffect->GetIcon();
 }
 
-EffectSourceType CLuaStatusEffect::getSourceType()
+uint16 CLuaStatusEffect::getSubIcon()
+{
+    return m_PLuaStatusEffect->GetSubIcon();
+}
+
+uint16 CLuaStatusEffect::getSourceType()
 {
     return m_PLuaStatusEffect->GetSourceType();
 }
 
-uint16 CLuaStatusEffect::getSourceTypeParam()
+uint32 CLuaStatusEffect::getSourceTypeParam()
 {
     return m_PLuaStatusEffect->GetSourceTypeParam();
+}
+
+auto CLuaStatusEffect::getOriginID() -> uint32
+{
+    return m_PLuaStatusEffect->GetOriginID();
 }
 
 //======================================================//
@@ -250,6 +289,8 @@ void CLuaStatusEffect::Register()
     SOL_REGISTER("getSubType", CLuaStatusEffect::getSubType);
     SOL_REGISTER("getSourceType", CLuaStatusEffect::getSourceType);
     SOL_REGISTER("getSourceTypeParam", CLuaStatusEffect::getSourceTypeParam);
+    SOL_REGISTER("getOriginID", CLuaStatusEffect::getOriginID);
+    SOL_REGISTER("setOriginID", CLuaStatusEffect::setOriginID);
     SOL_REGISTER("setSource", CLuaStatusEffect::setSource);
     SOL_REGISTER("setIcon", CLuaStatusEffect::setIcon);
     SOL_REGISTER("getPower", CLuaStatusEffect::getPower);
@@ -264,8 +305,11 @@ void CLuaStatusEffect::Register()
     SOL_REGISTER("addMod", CLuaStatusEffect::addMod);
     SOL_REGISTER("getSubPower", CLuaStatusEffect::getSubPower);
     SOL_REGISTER("setSubPower", CLuaStatusEffect::setSubPower);
+    SOL_REGISTER("setSubIcon", CLuaStatusEffect::setSubIcon);
     SOL_REGISTER("getTier", CLuaStatusEffect::getTier);
     SOL_REGISTER("setTier", CLuaStatusEffect::setTier);
+    SOL_REGISTER("getEffectSlot", CLuaStatusEffect::getEffectSlot);
+    SOL_REGISTER("setEffectSlot", CLuaStatusEffect::setEffectSlot);
     SOL_REGISTER("getTick", CLuaStatusEffect::getTick);
     SOL_REGISTER("setTick", CLuaStatusEffect::setTick);
     SOL_REGISTER("setStartTime", CLuaStatusEffect::setStartTime);
@@ -275,11 +319,12 @@ void CLuaStatusEffect::Register()
     SOL_REGISTER("delEffectFlag", CLuaStatusEffect::delEffectFlag);
     SOL_REGISTER("hasEffectFlag", CLuaStatusEffect::hasEffectFlag);
     SOL_REGISTER("getIcon", CLuaStatusEffect::getIcon);
+    SOL_REGISTER("getSubIcon", CLuaStatusEffect::getSubIcon);
 }
 
 std::ostream& operator<<(std::ostream& os, const CLuaStatusEffect& effect)
 {
-    std::string id = effect.GetStatusEffect() ? std::to_string(effect.GetStatusEffect()->GetStatusID()) : "nullptr";
+    std::string id = effect.GetStatusEffect() ? std::to_string(static_cast<uint16>(effect.GetStatusEffect()->GetStatusID())) : "nullptr";
     return os << "CLuaStatusEffect(" << id << ")";
 }
 

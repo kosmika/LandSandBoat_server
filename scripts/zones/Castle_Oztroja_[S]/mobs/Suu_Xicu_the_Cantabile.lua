@@ -10,6 +10,16 @@ mixins = { require('scripts/mixins/job_special') }
 ---@type TMobEntity
 local entity = {}
 
+entity.spawnPoints =
+{
+    { x = -214.770, y = -0.681, z =  96.357 }
+}
+
+entity.onMobInitialize = function(mob)
+    xi.mob.updateNMSpawnPoint(mob)
+    mob:setRespawnTime(math.random(900, 10800))
+end
+
 entity.onMobRoam = function(mob)
     local mobId = mob:getID()
     local hpp = mob:getHPP()
@@ -70,9 +80,6 @@ entity.onMobFight = function(mob, target)
     end
 end
 
-entity.onMobDeath = function(mob, player, optParams)
-end
-
 entity.onMobDespawn = function(mob)
     local mobId = mob:getID()
 
@@ -83,7 +90,7 @@ entity.onMobDespawn = function(mob)
         end
     end
 
-    UpdateNMSpawnPoint(mob:getID())
+    xi.mob.updateNMSpawnPoint(mob)
     mob:setRespawnTime(math.random(14400, 18000)) -- 4 to 5 hours
 end
 

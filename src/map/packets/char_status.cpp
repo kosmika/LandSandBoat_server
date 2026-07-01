@@ -21,6 +21,7 @@
 
 #include "char_status.h"
 
+#include "aman.h"
 #include "common/logging.h"
 
 #include "common/vana_time.h"
@@ -29,107 +30,111 @@
 
 #include "ai/ai_container.h"
 #include "ai/states/death_state.h"
-#include "entities/charentity.h"
+#include "entities/char_entity.h"
 #include "item_container.h"
+#include "items/item_linkshell.h"
 #include "status_effect_container.h"
 #include "utils/itemutils.h"
+#include "utils/mountutils.h"
 
 // https://github.com/atom0s/XiPackets/tree/main/world/server/0x0037
 
 // Namespace to avoid compilation units using the same structs twice with different definitions
 namespace charStatusFlags
 {
-    struct flags0_t
-    {
-        uint32_t HideFlag : 1;
-        uint32_t SleepFlag : 1;
-        uint32_t GroundFlag : 1;
-        uint32_t CliPosInitFlag : 1;
-        uint32_t LfgFlag : 1;
-        uint32_t AnonymousFlag : 1;
-        uint32_t CfhFlag : 1;
-        uint32_t AwayFlag : 1;
-        uint32_t Gender : 1;
-        uint32_t unknown_1_9 : 1;
-        uint32_t unknown_1_10 : 1;
-        uint32_t GraphSize : 2;
-        uint32_t Chocobo_Index : 3;
-        uint32_t hpp : 8;
-        uint32_t PlayOnelineFlag : 1;
-        uint32_t LinkShellFlag : 1;
-        uint32_t LinkDeadFlag : 1;
-        uint32_t TargetOffFlag : 1;
-        uint32_t unknown_3_28 : 1;
-        uint32_t GmLevel : 3;
-    };
 
-    struct flags1_t
-    {
-        uint32_t Speed : 12;
-        uint32_t Hackmove : 1;
-        uint32_t FreezeFlag : 1;
-        uint32_t unknown_1_14 : 1;
-        uint32_t InvisFlag : 1;
-        uint32_t unknown_2_16 : 1;
-        uint32_t SpeedBase : 8;
-        uint32_t unknown_3_25 : 4;
-        uint32_t BazaarFlag : 1;
-        uint32_t CharmFlag : 1;
-        uint32_t GmIconFlag : 1;
-    };
+struct flags0_t
+{
+    uint32_t HideFlag : 1;
+    uint32_t SleepFlag : 1;
+    uint32_t GroundFlag : 1;
+    uint32_t CliPosInitFlag : 1;
+    uint32_t LfgFlag : 1;
+    uint32_t AnonymousFlag : 1;
+    uint32_t CfhFlag : 1;
+    uint32_t AwayFlag : 1;
+    uint32_t Gender : 1;
+    uint32_t unknown_1_9 : 1;
+    uint32_t unknown_1_10 : 1;
+    uint32_t GraphSize : 2;
+    uint32_t Chocobo_Index : 3;
+    uint32_t hpp : 8;
+    uint32_t PlayOnelineFlag : 1;
+    uint32_t LinkShellFlag : 1;
+    uint32_t LinkDeadFlag : 1;
+    uint32_t TargetOffFlag : 1;
+    uint32_t unknown_3_28 : 1;
+    uint32_t GmLevel : 3;
+};
 
-    struct flags2_t
-    {
-        uint32_t NamedFlag : 1;
-        uint32_t SingleFlag : 1;
-        uint32_t AutoPartyFlag : 1;
-        uint32_t PetIndex : 16;
-        uint32_t MotStopFlag : 1;
-        uint32_t CliPriorityFlag : 1;
-        uint32_t BallistaFlg : 8;
-        uint32_t unknown_3_29 : 3;
-    };
+struct flags1_t
+{
+    uint32_t Speed : 12;
+    uint32_t Hackmove : 1;
+    uint32_t FreezeFlag : 1;
+    uint32_t unknown_1_14 : 1;
+    uint32_t InvisFlag : 1;
+    uint32_t unknown_2_16 : 1;
+    uint32_t SpeedBase : 8;
+    uint32_t unknown_3_25 : 4;
+    uint32_t BazaarFlag : 1;
+    uint32_t CharmFlag : 1;
+    uint32_t GmIconFlag : 1;
+};
 
-    struct flags3_t
-    {
-        uint32_t LfgMasterFlag : 1;
-        uint32_t TrialFlag : 1;
-        uint32_t SilenceFlag : 1;
-        uint32_t NewCharacterFlag : 1;
-        uint32_t MentorFlag : 1;
-        uint32_t unknown_0_5 : 1;
-        uint32_t unknown_0_6 : 1;
-        uint32_t unknown_0_7 : 1;
-        uint32_t BallistaTeam : 8;
-        uint32_t unknown_2_16 : 16;
-    };
+struct flags2_t
+{
+    uint32_t NamedFlag : 1;
+    uint32_t SingleFlag : 1;
+    uint32_t AutoPartyFlag : 1;
+    uint32_t PetIndex : 16;
+    uint32_t MotStopFlag : 1;
+    uint32_t CliPriorityFlag : 1;
+    uint32_t BallistaFlg : 8;
+    uint32_t unknown_3_29 : 3;
+};
 
-    struct flags4_t
-    {
-        uint8_t GeoIndiElement : 4;
-        uint8_t GeoIndiSize : 2;
-        uint8_t GeoIndiFlag : 1;
-        uint8_t JobMasterFlag : 1;
-    };
+struct flags3_t
+{
+    uint32_t LfgMasterFlag : 1;
+    uint32_t TrialFlag : 1;
+    uint32_t SilenceFlag : 1;
+    uint32_t NewCharacterFlag : 1;
+    uint32_t MentorFlag : 1;
+    uint32_t unknown_0_5 : 1;
+    uint32_t unknown_0_6 : 1;
+    uint32_t unknown_0_7 : 1;
+    uint32_t BallistaTeam : 8;
+    uint32_t unknown_2_16 : 16;
+};
 
-    struct flags5_t
-    {
-        uint8_t unknown_0_0 : 2;
-        uint8_t unknown_0_2 : 2;
-        uint8_t unknown_0_4 : 4;
-    };
+struct flags4_t
+{
+    uint8_t GeoIndiElement : 4;
+    uint8_t GeoIndiSize : 2;
+    uint8_t GeoIndiFlag : 1;
+    uint8_t JobMasterFlag : 1;
+};
 
-    struct flags6_t
-    {
-        uint32_t unknown_0_0 : 1;
-        uint32_t unknown_0_1 : 1;
-        uint32_t unknown_0_2 : 1;
-        uint32_t unknown_0_3 : 1;
-        uint32_t unknown_0_4 : 1;
-        uint32_t unknown_0_5 : 1;
-        uint32_t unknown_0_6 : 1;
-        uint32_t unknown_0_7 : 25;
-    };
+struct flags5_t
+{
+    uint8_t unknown_0_0 : 2;
+    uint8_t unknown_0_2 : 2;
+    uint8_t unknown_0_4 : 4;
+};
+
+struct flags6_t
+{
+    uint32_t unknown_0_0 : 1;
+    uint32_t unknown_0_1 : 1;
+    uint32_t unknown_0_2 : 1;
+    uint32_t unknown_0_3 : 1;
+    uint32_t unknown_0_4 : 1;
+    uint32_t unknown_0_5 : 1;
+    uint32_t unknown_0_6 : 1;
+    uint32_t unknown_0_7 : 25;
+};
+
 } // namespace charStatusFlags
 
 struct status_bits_t
@@ -209,17 +214,17 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
     packet->id   = 0x037;
     packet->size = roundUpToNearestFour(sizeof(GP_SERV_SERVERSTATUS)) / 4;
 
-    std::memcpy(packet->BufStatus, PChar->StatusEffectContainer->m_StatusIcons, 32);
-    std::memcpy(&packet->BufStatusBits, &PChar->StatusEffectContainer->m_Flags, sizeof(status_bits_t));
+    std::memcpy(packet->BufStatus, PChar->StatusEffectContainer->statusIcons(), 32);
+    std::memcpy(&packet->BufStatusBits, &PChar->StatusEffectContainer->statusBits(), sizeof(status_bits_t));
 
     packet->UniqueNo      = PChar->id;
-    packet->server_status = PChar->isInEvent() ? static_cast<uint8>(ANIMATION_EVENT) : PChar->animation;
+    packet->server_status = PChar->animation;
 
     CItemLinkshell* linkshell = (CItemLinkshell*)PChar->getEquip(SLOT_LINK1);
 
     if (linkshell && linkshell->isType(ITEM_LINKSHELL))
     {
-        lscolor_t LSColor = linkshell->GetLSColor();
+        Exdata::lscolor_t LSColor = linkshell->GetLSColor();
 
         // This seems wrong, but displays correctly?
         packet->r = (LSColor.R << 4) + 15;
@@ -227,10 +232,13 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
         packet->b = (LSColor.B << 4) + 15;
     }
 
-    packet->dead_counter1     = PChar->GetTimeRemainingUntilDeathHomepoint();
-    packet->dead_counter2     = CVanaTime::getInstance()->getVanaTime() + packet->dead_counter1 / 60;
+    // The client uses 66min as the maximum amount of time for death
+    // Once this value reaches below 6min then the client will force homepoint the character
+    auto deadRemaining        = timer::count_seconds(6min + PChar->GetTimeUntilDeathHomepoint());
+    packet->dead_counter1     = static_cast<uint32>(60 * deadRemaining);
+    packet->dead_counter2     = earth_time::vanadiel_timestamp() + deadRemaining;
     packet->costume_id        = PChar->m_Costume;
-    packet->model_hitbox_size = 4; // TODO: verify this
+    packet->model_hitbox_size = static_cast<uint8_t>(PChar->modelHitboxSize * 10);
     packet->mount_id          = 0;
 
     if (PChar->animation == ANIMATION_FISHING_START)
@@ -262,10 +270,11 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
     flags0.unknown_3_28    = 0;     // Unknown
     flags0.GmLevel         = PChar->visibleGmLevel;
 
-    if (auto* effect = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_MOUNTED))
+    if (auto* effect = PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::Mounted))
     {
-        packet->mount_id     = effect->GetPower();
-        flags0.Chocobo_Index = effect->GetSubPower();
+        const auto [ChocoboIndex, CustomProperties] = mountutils::packetDefinition(PChar);
+        packet->mount_id                            = effect->GetPower();
+        flags0.Chocobo_Index                        = ChocoboIndex;
     }
 
     // flags 1 starts at 0x2C
@@ -273,9 +282,9 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
 
     flags1.Speed        = PChar->UpdateSpeed();
     flags1.Hackmove     = PChar->wallhackEnabled; // GM wallhack, walk through walls
-    flags1.FreezeFlag   = 0;                      // Freeze client in place. Is this used?
+    flags1.FreezeFlag   = PChar->isFrozenFlagged; // Freezes player in place, making them unable to move. Used when opening treasure chests, for instance.
     flags1.unknown_1_14 = 0;                      // Unknown.
-    flags1.InvisFlag    = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffectByFlag(EFFECTFLAG_INVISIBLE);
+    flags1.InvisFlag    = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffectByFlag(xi::StatusEffectFlag::Invisible);
     flags1.unknown_2_16 = 0; // Unknown.
     flags1.SpeedBase    = PChar->animationSpeed;
     flags1.unknown_3_25 = 0; // Unknown
@@ -288,7 +297,7 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
     flags2.NamedFlag       = false; // disable "The"
     flags2.SingleFlag      = false; // singular entity
     flags2.AutoPartyFlag   = false; // Not implemented.
-    flags2.MotStopFlag     = PChar->StatusEffectContainer->HasStatusEffect(EFFECT_TERROR);
+    flags2.MotStopFlag     = PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Terror);
     flags2.CliPriorityFlag = PChar->priorityRender;
     flags2.BallistaFlg     = static_cast<uint8>(PChar->allegiance);
     flags2.unknown_3_29    = 0; // Unknown, one of three bits appears to be campaign battle Sword & Shield Icon?
@@ -303,9 +312,9 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
 
     flags3.LfgMasterFlag    = false; // /inv icon WITH mastery star. Not currently implemented, this is set with the "Request" button in the Party menu.
     flags3.TrialFlag        = false; // Trial account icon flag
-    flags3.SilenceFlag      = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffect(EFFECT_SNEAK);
+    flags3.SilenceFlag      = PChar->m_isGMHidden || PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::Sneak);
     flags3.NewCharacterFlag = PChar->isNewPlayer();
-    flags3.MentorFlag       = PChar->isMentor();
+    flags3.MentorFlag       = PChar->aman().isMentor();
     flags3.unknown_0_5      = 0; // unknown
     flags3.unknown_0_6      = 0; // unknown
     flags3.unknown_0_7      = 0;
@@ -321,15 +330,15 @@ CCharStatusPacket::CCharStatusPacket(CCharEntity* PChar)
     flags4.JobMasterFlag  = PChar->getMod(Mod::SUPERIOR_LEVEL) == 5 && PChar->m_jobMasterDisplay;
 
     // GEO bubble effects, changes bubble effect depending on what effect is activated.
-    if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_COLURE_ACTIVE))
+    if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::ColureActive))
     {
-        flags4.GeoIndiElement = PChar->StatusEffectContainer->GetStatusEffect(EFFECT_COLURE_ACTIVE)->GetPower();
+        flags4.GeoIndiElement = PChar->StatusEffectContainer->GetStatusEffect(xi::StatusEffect::ColureActive)->GetPower();
         flags4.GeoIndiFlag    = 1;
     }
 
     // Size shouldn't change until the bubble is re-casted, but currently WIDENED COMPASS will widen the size of the bubble on the effect instantly, so this aligns with the code.
     // TODO: fix the discrepancy with retail.
-    if (PChar->StatusEffectContainer->HasStatusEffect(EFFECT_WIDENED_COMPASS))
+    if (PChar->StatusEffectContainer->HasStatusEffect(xi::StatusEffect::WidenedCompass))
     {
         flags4.GeoIndiSize = 2;
     }

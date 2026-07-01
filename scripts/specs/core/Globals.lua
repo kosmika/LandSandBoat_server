@@ -27,6 +27,18 @@ function GetItemByID(itemId)
 end
 
 ---@nodiscard
+---@param itemId xi.item
+---@return number
+function GetItemFlagsByID(itemId)
+end
+
+---@nodiscard
+---@param itemId xi.item
+---@return number
+function GetItemLevelRequirementsByID(itemId)
+end
+
+---@nodiscard
 ---@param npcid integer
 ---@param instanceObj CInstance?
 ---@return CBaseEntity?
@@ -158,6 +170,62 @@ end
 function GetSystemTime()
 end
 
+---@class LinkshellConciergeSlotRow
+---@field slotIndex integer
+---@field linkshellid integer
+---@field ownerCharId integer
+---@field groupKey integer
+---@field flag integer
+---@field lang integer
+---@field membersGoal integer
+---@field activeTier integer
+---@field characteristics integer
+---@field tz integer
+---@field days integer
+---@field times integer
+---@field postedDate integer
+---@field name string
+---@field color integer
+
+---@class LinkshellConciergeSlotData
+---@field linkshellid integer
+---@field ownerCharId integer
+---@field groupKey integer
+---@field flag integer
+---@field lang integer
+---@field membersGoal integer
+---@field activeTier integer
+---@field characteristics integer
+---@field tz integer
+---@field days integer
+---@field times integer
+---@field postedDate integer
+
+---@nodiscard
+---@param zoneId integer
+---@return LinkshellConciergeSlotRow[]
+function LoadLinkshellConciergeSlots(zoneId)
+end
+
+---@param zoneId integer
+---@param slotIndex integer
+---@param data LinkshellConciergeSlotData
+---@return nil
+function SetLinkshellConciergeSlot(zoneId, slotIndex, data)
+end
+
+---@param zoneId integer
+---@param slotIndex integer
+---@return nil
+function DeleteLinkshellConciergeSlot(zoneId, slotIndex)
+end
+
+---@param zoneId integer
+---@param linkshellid integer
+---@return nil
+function DecrementLinkshellConciergeMembersGoal(zoneId, linkshellid)
+end
+
 ---@nodiscard
 ---@return integer
 function JstMidnight()
@@ -165,7 +233,32 @@ end
 
 ---@nodiscard
 ---@return integer
-function JstWeekday()
+function JstDayOfTheYear()
+end
+
+---@nodiscard
+---@return integer
+function JstDayOfTheMonth()
+end
+
+---@nodiscard
+---@return integer
+function JstDayOfTheWeek()
+end
+
+---@nodiscard
+---@return integer
+function JstYear()
+end
+
+---@nodiscard
+---@return integer
+function JstMonth()
+end
+
+---@nodiscard
+---@return integer
+function JstHour()
 end
 
 ---@nodiscard
@@ -264,22 +357,6 @@ end
 function VanadielRSELocation()
 end
 
----@nodiscard
----@param offset integer
----@return boolean
-function SetVanadielTimeOffset(offset)
-end
-
----@nodiscard
----@return boolean
-function IsMoonNew()
-end
-
----@nodiscard
----@return boolean
-function IsMoonFull()
-end
-
 ---@param ElevatorID integer
 ---@return nil
 function RunElevator(ElevatorID)
@@ -361,11 +438,6 @@ end
 function DisallowRespawn(mobid, allowRespawn)
 end
 
----@param mobid integer
----@return nil
-function UpdateNMSpawnPoint(mobid)
-end
-
 ---@nodiscard
 ---@param minutes integer
 ---@return table
@@ -417,6 +489,13 @@ end
 ---@param timedSchedule table
 ---@return nil
 function RoeParseTimed(timedSchedule)
+end
+
+---@param expToDifficultyTable table
+---@param incrediblyEasyPreyLevel integer
+---@param incrediblyEasyPreyMinExp integer
+---@return nil
+function LoadExpDifficultyCurves(expToDifficultyTable, incrediblyEasyPreyLevel, incrediblyEasyPreyMinExp)
 end
 
 --@return table

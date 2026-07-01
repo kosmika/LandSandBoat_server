@@ -23,7 +23,7 @@
 
 #include "ai/ai_container.h"
 #include "common/utils.h"
-#include "entities/charentity.h"
+#include "entities/char_entity.h"
 #include "status_effect_container.h"
 
 CPlayerCharmController::CPlayerCharmController(CCharEntity* PChar)
@@ -42,13 +42,14 @@ CPlayerCharmController::~CPlayerCharmController()
     POwner->allegiance = ALLEGIANCE_TYPE::PLAYER;
 }
 
-void CPlayerCharmController::Tick(time_point tick)
+auto CPlayerCharmController::Tick(timer::time_point tick) -> Task<void>
 {
     m_Tick = tick;
+
     if (POwner->PMaster == nullptr || !POwner->PMaster->isAlive())
     {
-        POwner->StatusEffectContainer->DelStatusEffect(EFFECT_CHARM);
-        return;
+        POwner->StatusEffectContainer->DelStatusEffect(xi::StatusEffect::CharmI);
+        co_return;
     }
 
     if (POwner->PAI->IsEngaged())
@@ -61,7 +62,7 @@ void CPlayerCharmController::Tick(time_point tick)
     }
 }
 
-void CPlayerCharmController::DoCombatTick(time_point tick)
+void CPlayerCharmController::DoCombatTick(timer::time_point tick)
 {
     if (!POwner->PMaster->PAI->IsEngaged())
     {
@@ -90,7 +91,7 @@ void CPlayerCharmController::DoCombatTick(time_point tick)
     }
 }
 
-void CPlayerCharmController::DoRoamTick(time_point tick)
+void CPlayerCharmController::DoRoamTick(timer::time_point tick)
 {
     if (POwner->PMaster->PAI->IsEngaged())
     {

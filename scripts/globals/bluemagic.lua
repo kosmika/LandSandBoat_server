@@ -2,9 +2,11 @@
 -- Blue Magic utilities
 -- Used for Blue Magic spells.
 -----------------------------------
+require('scripts/globals/combat/physical_utilities')
+require('scripts/globals/combat/magic_hit_rate')
 require('scripts/globals/magic')
 require('scripts/globals/mobskills')
-require('scripts/globals/combat/physical_utilities')
+require('scripts/globals/spells/damage_spell')
 -----------------------------------
 xi = xi or {}
 xi.spells = xi.spells or {}
@@ -40,14 +42,16 @@ end
 
 -- Get WSC
 local function calculateWSC(attacker, params)
-    local wsc = calculateAlpha(attacker:getMainLvl()) *
-    (attacker:getStat(xi.mod.STR) * params.str_wsc +
-    attacker:getStat(xi.mod.DEX) * params.dex_wsc +
-    attacker:getStat(xi.mod.VIT) * params.vit_wsc +
-    attacker:getStat(xi.mod.AGI) * params.agi_wsc +
-    attacker:getStat(xi.mod.INT) * params.int_wsc +
-    attacker:getStat(xi.mod.MND) * params.mnd_wsc +
-    attacker:getStat(xi.mod.CHR) * params.chr_wsc)
+    local alpha  = calculateAlpha(attacker:getMainLvl())
+    local wscSTR = attacker:getStat(xi.mod.STR) * params.str_wsc
+    local wscDEX = attacker:getStat(xi.mod.DEX) * params.dex_wsc
+    local wscVIT = attacker:getStat(xi.mod.VIT) * params.vit_wsc
+    local wscAGI = attacker:getStat(xi.mod.AGI) * params.agi_wsc
+    local wscINT = attacker:getStat(xi.mod.INT) * params.int_wsc
+    local wscMND = attacker:getStat(xi.mod.MND) * params.mnd_wsc
+    local wscCHR = attacker:getStat(xi.mod.CHR) * params.chr_wsc
+
+    local wsc = (wscSTR + wscDEX + wscVIT + wscAGI + wscINT + wscMND + wscCHR) * alpha
 
     return wsc
 end
@@ -133,13 +137,9 @@ end
 
 -- Get hitrate
 local function calculateHitrate(attacker, target, bonusacc)
-    local acc     = attacker:getACC() + attacker:getMerit(xi.merit.PHYSICAL_POTENCY) * 2 + (attacker:getMainLvl() - target:getMainLvl()) * 4 + bonusacc
-    local eva     = target:getEVA()
-    local hitrate = (75 + (acc - eva) / 2) / 100
-
-    hitrate = utils.clamp(hitrate, 0.2, 0.95)
-
-    return hitrate
+    -- your mainhand may not be a sword, so hit rate would vary here
+    -- TODO: verify hit rate of physical blue magic with different weapons
+    return xi.combat.physicalHitRate.getPhysicalHitRate(attacker, target, bonusacc + attacker:getMerit(xi.merit.PHYSICAL_POTENCY) * 2, xi.attackAnimation.RIGHT_ATTACK, false)
 end
 
 -- Get the effect of ecosystem correlation
@@ -153,12 +153,78 @@ local function calculateCorrelation(spellEcosystem, monsterEcosystem, merits)
     return effect
 end
 
+-- Consecutive Elemental Damage Penalty. Most commonly known as "Nuke Wall".
+-- NOTE: Duplicate of the same function in damage_spell.lua, until Blue magic gets rewritten.
+local function calculateNukeWallFactor(target, spellElement, finalDamage)
+    -- Initial check.
+    if
+        not target:isNM() or               -- Target is not an NM.
+        spellElement <= xi.element.NONE or -- Action isn't elemental.
+        finalDamage < 0                    -- Action heals target.
+    then
+        return 1
+    end
+
+    -----------------------------------
+    -- Fetch current wall potency and math based on time and Ruake
+    -----------------------------------
+    local potency = 0
+    local effect  = target:getStatusEffect(xi.effect.NUKE_WALL)
+
+    if effect then
+        -- Current nuke wall effect.
+        potency = effect:getPower()
+
+        -- Effect potency is reduced by 20% after 1 second and remains stable for the remaining time, unless refreshed.
+        if effect:getTimeRemaining() <= 4000 then
+            potency = utils.clamp(potency - 2000, 0, 4000) -- Potency is reduced by 2000 (20%) after first second has happened. Can't go below 0.
+        end
+
+        -- Rayke effect.
+        if target:hasStatusEffect(xi.effect.RAYKE) then
+            local raykeSubpower = target:getStatusEffect(xi.effect.RAYKE):getSubPower()
+
+            -- current bit size of subPower is 16 bits, 4*4 = 16
+            -- Step from 0 to 16 in increments of 4...
+            for i = 0, 16, 4 do
+                -- If element is bitpacked into rayke subeffect...
+                if bit.band(bit.rshift(raykeSubpower, i), 0xF) == spellElement then
+                    potency = math.floor(potency / 2)
+
+                    break
+                end
+            end
+        end
+
+        target:delStatusEffectSilent(xi.effect.NUKE_WALL)
+    end
+
+    -----------------------------------
+    -- Calculate new potency after this nuke and renew effect.
+    -----------------------------------
+    -- Calculate damage needed to reach the potency cap (4000). The lower the level, the easier to hit potency cap.
+    local damageCap = target:getMainLvl() * 21 + 500
+
+    -- Calculate new potency, based on existing potency and damage dealt (compared to mob level).
+    local finalPotency = utils.clamp(math.floor(4000 * finalDamage / damageCap) + potency, 0, 4000)
+
+    -- Renew status effect without messages.
+    target:addStatusEffect(xi.effect.NUKE_WALL, { power = finalPotency, duration = 5, origin = target, icon = 0, subPower = spellElement })
+
+    -----------------------------------
+    -- We return JUST the factor based on previous nuke. This nuke only affects the next one.
+    -----------------------------------
+    return 1 - potency / 10000
+end
+
 -----------------------------------
 -- Global functions
 -----------------------------------
 
 -- Get the damage for a physical Blue Magic spell
 xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
+    spell:setCritical(false)
+
     -----------------------
     -- Get final D value --
     -----------------------
@@ -180,7 +246,7 @@ xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
     local bonusWSC   = 0
 
     -- BLU AF3 bonus (triples the base WSC when it procs)
-    if caster:getMod(xi.mod.AUGMENT_BLU_MAGIC) > math.random(0, 99) then
+    if  math.random(1, 100) <= caster:getMod(xi.mod.AUGMENT_BLU_MAGIC) then
         bonusWSC = 2
     end
 
@@ -206,6 +272,8 @@ xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
 
     -- Final D
     local finalD = math.floor(initialD + fStr + wsc)
+    -- TODO: Implement ENHANCES_CHAIN_AFFINITY. Increase base damage of spell, but not limited to spell's damage cap
+    -- ENHANCES_CHAIN_AFFINITY should also not modify skillchain damage
 
     ----------------------------------------------
     -- Get the possible pDIF range and hit rate --
@@ -220,7 +288,7 @@ xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
     params.tphitslanded = 0
 
     -- params.critchance will only be non-nil if base critchance is passed from spell lua
-    local nativecrit  = xi.combat.physical.calculateSwingCriticalRate(caster, target, 0, false)
+    local nativecrit  = xi.combat.physical.calculateSwingCriticalRate(caster, target, 0, xi.slot.MAIN)
     params.critchance = params.critchance == nil and 0 or utils.clamp(params.critchance / 100 + nativecrit, 0.05, 0.95)
 
     local cratio  = calculatecRatio(params.offcratiomod / target:getStat(xi.mod.DEF), caster:getMainLvl(), target:getMainLvl())
@@ -233,6 +301,7 @@ xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
     local hitsdone          = 0
     local hitslanded        = 0
     local finaldmg          = 0
+    local anyCrit           = false
     local sneakIsApplicable = false
     local trickAttackTarget = nil
 
@@ -262,12 +331,12 @@ xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
             local pdif = math.random(cratio[1] * 1000, cratio[2] * 1000)
             pdif       = pdif / 1000
 
-            if
-                sneakIsApplicable or
-                math.random() < params.critchance
-            then
+            local isCritical = sneakIsApplicable or math.random() < params.critchance
+            if isCritical then
                 pdif = pdif + 1
             end
+
+            anyCrit = anyCrit or isCritical
 
             -- Add it to our final damage
             if hitsdone == 0 then
@@ -293,14 +362,17 @@ xi.spells.blue.usePhysicalSpell = function(caster, target, spell, params)
         hitsdone = hitsdone + 1
     end
 
-    if finaldmg <= 0 then
-        spell:setMsg(xi.msg.basic.MAGIC_NO_EFFECT)
+    finaldmg = math.floor(finaldmg * xi.combat.damage.calculateDamageAdjustment(target, true, false, false, false))
+
+    if hitslanded == 0 then
+        spell:setMsg(xi.msg.basic.MAGIC_FAIL)
     end
 
+    spell:setCritical(anyCrit)
     return xi.spells.blue.applySpellDamage(caster, target, spell, finaldmg, params, trickAttackTarget)
 end
 
--- Get the damage for a magical Blue Magic spell
+-- Get the damage for a magical Blue Magic spell. Called from spell scripts.
 xi.spells.blue.useMagicalSpell = function(caster, target, spell, params)
     -- In individual magical spells, don't use params.effect for the added effect
     -- This would affect the resistance check for damage here
@@ -312,10 +384,19 @@ xi.spells.blue.useMagicalSpell = function(caster, target, spell, params)
     params.skillType = xi.skill.BLUE_MAGIC
 
     -- WSC
-    local wsc = calculateWSC(caster, params)
-    if caster:hasStatusEffect(xi.effect.BURST_AFFINITY) then
-        wsc = wsc * 2
+    local wsc           = calculateWSC(caster, params)
+    local wscMultiplier = 1
+
+    -- BLU AF3 bonus (triples the base WSC when it procs)
+    if math.random(1, 100) <= caster:getMod(xi.mod.AUGMENT_BLU_MAGIC) then
+        wscMultiplier = wscMultiplier + 1
     end
+
+    if caster:hasStatusEffect(xi.effect.BURST_AFFINITY) then
+        wscMultiplier = wscMultiplier + 1 + caster:getMod(xi.mod.ENHANCES_BURST_AFFINITY) / 100
+    end
+
+    wsc = wsc * wscMultiplier -- Bonus WSC from AF3/BA
 
     -- INT/MND/CHR dmg bonuses
     params.diff     = caster:getStat(params.attribute) - target:getStat(params.attribute)
@@ -330,19 +411,43 @@ xi.spells.blue.useMagicalSpell = function(caster, target, spell, params)
     -- Monster correlation
     local correlationMultiplier = calculateCorrelation(params.ecosystem, target:getEcosystem(), caster:getMerit(xi.merit.MONSTER_CORRELATION))
 
+    -- Data
+    local spellId            = spell:getID()
+    local spellElement       = spell:getElement()
+    local spellGroup         = spell:getSpellGroup()
+    local skillType          = xi.skill.BLUE_MAGIC
+    local _, skillchainCount = xi.magicburst.formMagicBurst(target, spellElement) -- External function. Not present in magic.lua.
+
     -- Final D value
-    local finalD = (initialD + wsc) * (params.multiplier + azureBonus + correlationMultiplier) + statBonus
+    local finalDamage    = (initialD + wsc) * (params.multiplier + azureBonus + correlationMultiplier) + statBonus
 
-    -- Multitarget damage reduction
-    local finaldmg = math.floor(finalD * xi.spells.damage.calculateMTDR(spell))
+    finalDamage = math.floor(finalDamage * xi.combat.magicHitRate.calculateResistRate(caster, target, spellGroup, skillType, 0, spellElement, params.attribute, 0, 0))
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateElementalStaffBonus(caster, spellElement))
+    finalDamage = math.floor(finalDamage * xi.combat.damage.magicalElementSDT(target, spellElement))
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateDayAndWeather(caster, spellElement, false))
+    finalDamage = math.floor(finalDamage * xi.combat.damage.steamJacketMultiplier(target, spellElement))
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateMagicBonusDiff(caster, target, spellId, skillType, spellElement, 0))
 
-    -- Resistance
-    finaldmg = math.floor(finaldmg * applyResistanceEffect(caster, target, spell, params))
+    if
+        caster:hasStatusEffect(xi.effect.BURST_AFFINITY) or
+        caster:hasStatusEffect(xi.effect.AZURE_LORE)
+    then
+        if skillchainCount > 0 then
+            finalDamage = math.floor(finalDamage * xi.spells.damage.calculateIfMagicBurst(target, spellElement, skillchainCount))
+            finalDamage = math.floor(finalDamage * xi.spells.damage.calculateIfMagicBurstBonus(caster, target, spellId, skillType, spellElement))
 
-    -- MAB/MDB/weather/day/affinity/burst effect on damage
-    finaldmg = math.floor(addBonuses(caster, spell, target, finaldmg))
+            spell:setMsg(spell:getMagicBurstMessage()) -- "Magic Burst!"
 
-    return xi.spells.blue.applySpellDamage(caster, target, spell, finaldmg, params, nil)
+            caster:triggerRoeEvent(xi.roeTrigger.MAGIC_BURST)
+        end
+
+        caster:delStatusEffectSilent(xi.effect.BURST_AFFINITY)
+    end
+
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateEbullienceMultiplier(caster, spellGroup))
+    finalDamage = math.floor(finalDamage * xi.settings.main.BLUE_POWER)
+
+    return xi.spells.blue.applySpellDamage(caster, target, spell, finalDamage, params, nil)
 end
 
 -- Spell script Helper function.
@@ -351,8 +456,9 @@ xi.spells.blue.useDrainSpell = function(caster, target, spell, params, damageCap
 
     -- Early returns
     if
-        target:isUndead() or
-        xi.spells.damage.calculateNukeAbsorbOrNullify(target, spell:getElement()) == 0 -- Drain spells cannot be absorbed, but they can be nullified.
+        xi.spells.damage.calculateAbsorption(target, spell:getElement(), true) ~= 1 or
+        xi.spells.damage.calculateNullification(target, spell:getElement(), true, false) ~= 1 or
+        target:isUndead()
     then
         spell:setMsg(xi.msg.basic.MAGIC_NO_EFFECT)
 
@@ -366,10 +472,37 @@ xi.spells.blue.useDrainSpell = function(caster, target, spell, params, damageCap
         finalDamage = utils.clamp(finalDamage, 0, damageCap)
     end
 
-    -- Multipliers
-    finalDamage = math.floor(finalDamage * applyResistanceEffect(caster, target, spell, params))
-    finalDamage = math.floor(addBonuses(caster, spell, target, finalDamage))
-    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateTMDA(target, spell:getElement()))
+    -- Data
+    local spellId            = spell:getID()
+    local spellElement       = spell:getElement()
+    local spellGroup         = spell:getSpellGroup()
+    local skillType          = xi.skill.BLUE_MAGIC
+    local _, skillchainCount = xi.magicburst.formMagicBurst(target, spellElement) -- External function. Not present in magic.lua.
+
+    finalDamage = math.floor(finalDamage * xi.combat.magicHitRate.calculateResistRate(caster, target, spellGroup, skillType, 0, spellElement, params.attribute, 0, 0))
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateElementalStaffBonus(caster, spellElement))
+    finalDamage = math.floor(finalDamage * xi.combat.damage.magicalElementSDT(target, spellElement))
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateDayAndWeather(caster, spellElement, false))
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateMagicBonusDiff(caster, target, spellId, skillType, spellElement, 0))
+
+    if
+        caster:hasStatusEffect(xi.effect.BURST_AFFINITY) or
+        caster:hasStatusEffect(xi.effect.AZURE_LORE)
+    then
+        if skillchainCount > 0 then
+            finalDamage = math.floor(finalDamage * xi.spells.damage.calculateIfMagicBurst(target, spellElement, skillchainCount))
+            finalDamage = math.floor(finalDamage * xi.spells.damage.calculateIfMagicBurstBonus(caster, target, spellId, skillType, spellElement))
+
+            spell:setMsg(spell:getMagicBurstMessage()) -- "Magic Burst!"
+
+            caster:triggerRoeEvent(xi.roeTrigger.MAGIC_BURST)
+        end
+
+        caster:delStatusEffectSilent(xi.effect.BURST_AFFINITY)
+    end
+
+    finalDamage = math.floor(finalDamage * xi.spells.damage.calculateEbullienceMultiplier(caster, spellGroup))
+    finalDamage = math.floor(finalDamage * xi.combat.damage.calculateDamageAdjustment(target, false, true, false, false))
     finalDamage = math.floor(finalDamage * xi.settings.main.BLUE_POWER)
 
     -- MP drain
@@ -383,9 +516,9 @@ xi.spells.blue.useDrainSpell = function(caster, target, spell, params, damageCap
     end
 
     -- Handle Phalanx, One for All, Stoneskin and target HP (Cant be higher than current HP)
-    finalDamage = utils.clamp(finalDamage - target:getMod(xi.mod.PHALANX), 0, 99999)
-    finalDamage = utils.clamp(utils.oneforall(target, finalDamage), 0, 99999)
-    finalDamage = utils.clamp(utils.stoneskin(target, finalDamage), -99999, 99999)
+    finalDamage = utils.clamp(utils.handlePhalanx(target, finalDamage), 0, 99999)
+    finalDamage = utils.clamp(utils.handleOneForAll(target, finalDamage), 0, 99999)
+    finalDamage = utils.clamp(utils.handleStoneskin(target, finalDamage), -99999, 99999)
     finalDamage = utils.clamp(finalDamage, 0, target:getHP())
 
     -- Check if the mob has a damage cap
@@ -403,11 +536,15 @@ xi.spells.blue.useDrainSpell = function(caster, target, spell, params, damageCap
     return finalDamage
 end
 
--- Get the damage and resistance for a breath Blue Magic spell
-xi.spells.blue.useBreathSpell = function(caster, target, spell, params, isConal)
-    local results = {}
-    results[1] = 0 -- damage
-    results[2] = 0 -- resistance (used in spell to determine added effect resistance)
+-- Breath-type blue magic spells.
+xi.spells.blue.useBreathSpell = function(caster, target, spell, params)
+    -- Early return.
+    if
+        params.isConal and               -- Conal breath spells
+        not target:isInfront(caster, 32) -- Conal check (45° cone)
+    then
+        return 0
+    end
 
     -- Initial damage
     local dmg = caster:getHP() / params.hpMod
@@ -415,39 +552,84 @@ xi.spells.blue.useBreathSpell = function(caster, target, spell, params, isConal)
         dmg = dmg + caster:getMainLvl() / params.lvlMod
     end
 
-    -- Conal breath spells
-    if isConal then
-        -- Conal check (45° cone)
-        local isInCone = 0
-        if target:isInfront(caster, 32) then
-            isInCone = 1
-        end
+    -- Parameters
+    local spellId      = spell:getID() or 0
+    local spellFamily  = spell:getSpellFamily() or 0
+    local spellElement = spell:getElement() or 0
+    local attackType   = params.attackType or xi.attackType.NONE
+    local damageType   = params.damageType or xi.damageType.NONE
 
-        dmg = dmg * isInCone
+    -- Multipliers
+    local correlationMultiplier       = 1 + calculateCorrelation(params.ecosystem, target:getEcosystem(), caster:getMerit(xi.merit.MONSTER_CORRELATION))
+    local breathSDT                   = 1 + caster:getMod(xi.mod.BREATH_DMG_DEALT) / 100
+    local absorb                      = xi.spells.damage.calculateAbsorption(target, spellElement, false)
+    local nullify                     = xi.spells.damage.calculateNullification(target, spellElement, false, true)
+    local targetMagicDamageAdjustment = xi.combat.damage.calculateDamageAdjustment(target, false, false, false, true)
+    local elementalStaffBonus         = xi.spells.damage.calculateElementalStaffBonus(caster, spellElement)
+    local elementalAffinityBonus      = xi.spells.damage.calculateElementalAffinityBonus(caster, spellElement)
+    local resistTier                  = xi.combat.magicHitRate.calculateResistRate(caster, target, spellFamily, xi.skill.BLUE_MAGIC, 0, spellElement, 0, 0, 0)
+    local additionalResistTier        = xi.spells.damage.calculateAdditionalResistTier(caster, target, spellElement)
+    local elementalSDT                = xi.combat.damage.magicalElementSDT(target, spellElement)
+    local dayAndWeather               = xi.spells.damage.calculateDayAndWeather(caster, spellElement, false)
+    local magicBonusDiff              = xi.spells.damage.calculateMagicBonusDiff(caster, target, spellId, xi.skill.BLUE_MAGIC, spellElement, 0)
+    local skillTypeMultiplier         = xi.spells.damage.calculateSkillTypeMultiplier(xi.skill.BLUE_MAGIC)
+    local ninFutaeBonus               = xi.spells.damage.calculateNinFutaeBonus(caster, xi.skill.BLUE_MAGIC)
+    local ninjutsuMultiplier          = xi.spells.damage.calculateNinjutsuMultiplier(caster, target, xi.skill.BLUE_MAGIC)
+    local scarletDeliriumMultiplier   = xi.combat.damage.scarletDeliriumMultiplier(caster)
+    local areaOfEffectResistance      = xi.spells.damage.calculateAreaOfEffectResistance(target, spell)
+
+    dmg = math.floor(dmg * correlationMultiplier)
+    dmg = math.floor(dmg * breathSDT)
+    dmg = math.floor(dmg * absorb)
+    dmg = math.floor(dmg * nullify)
+    dmg = math.floor(dmg * targetMagicDamageAdjustment)
+    dmg = math.floor(dmg * elementalStaffBonus)
+    dmg = math.floor(dmg * elementalAffinityBonus)
+    dmg = math.floor(dmg * resistTier)
+    dmg = math.floor(dmg * additionalResistTier)
+    dmg = math.floor(dmg * elementalSDT)
+    dmg = math.floor(dmg * dayAndWeather)
+    dmg = math.floor(dmg * magicBonusDiff)
+    dmg = math.floor(dmg * skillTypeMultiplier)
+    dmg = math.floor(dmg * ninFutaeBonus)
+    dmg = math.floor(dmg * ninjutsuMultiplier)
+    dmg = math.floor(dmg * scarletDeliriumMultiplier)
+    dmg = math.floor(dmg * areaOfEffectResistance)
+    dmg = math.floor(dmg * calculateNukeWallFactor(target, spellElement, dmg))
+
+    -- Handle Magic Absorb message and HP recovery.
+    if dmg < 0 then
+        dmg = target:addHP(-dmg)
+        spell:setMsg(xi.msg.basic.MAGIC_RECOVERS_HP)
+
+        return dmg
     end
 
-    -- Monster correlation
-    local correlationMultiplier = calculateCorrelation(params.ecosystem, target:getEcosystem(), caster:getMerit(xi.merit.MONSTER_CORRELATION))
-    dmg = math.floor(dmg * (1 + correlationMultiplier))
+    dmg = math.floor(target:handleSevereDamage(dmg, false))
 
-    -- Monster elemental adjustments
-    local mobEleAdjustments = xi.spells.damage.calculateSDT(target, spell:getElement())
-    dmg = math.floor(dmg * mobEleAdjustments)
+    -- Final adjustments.
+    if dmg > 0 then
+        dmg = utils.clamp(utils.handlePhalanx(target, dmg), 0, 99999)
+        dmg = utils.clamp(utils.handleOneForAll(target, dmg), 0, 99999)
+        dmg = utils.clamp(utils.handleStoneskin(target, dmg), -99999, 99999)
+        dmg = utils.clamp(dmg, 0, target:getHP())
+        dmg = target:checkDamageCap(dmg)
+    end
 
-    -- Modifiers
-    dmg = math.floor(dmg * (1 + caster:getMod(xi.mod.BREATH_DMG_DEALT) / 100))
+    target:takeSpellDamage(caster, spell, dmg, attackType, damageType)
 
-    -- Resistance
-    local resistance = applyResistanceEffect(caster, target, spell, params)
-    dmg = math.floor(dmg * resistance)
+    -- Handle TP
+    local tpHits        = params.tphitslanded or 0
+    local extraTPGained = xi.combat.tp.calculateTPGainOnMagicalDamage(caster, target, dmg) * math.max(tpHits - 1, 0) -- Calculate extra TP gained from multihits. takeSpellDamage accounts for one already.
+    target:addTP(extraTPGained)
 
-    -- Final damage
-    dmg = target:breathDmgTaken(dmg)
+    -- Handle Afflatus Misery.
+    target:handleAfflatusMiseryDamage(dmg)
 
-    results[1] = xi.spells.blue.applySpellDamage(caster, target, spell, dmg, params, nil)
-    results[2] = resistance
+    -- Handle Enmity.
+    target:updateEnmityFromDamage(caster, dmg)
 
-    return results
+    return dmg
 end
 
 -- Apply spell damage
@@ -456,12 +638,13 @@ xi.spells.blue.applySpellDamage = function(caster, target, spell, dmg, params, t
     local attackType    = params.attackType or xi.attackType.NONE
     local damageType    = params.damageType or xi.damageType.NONE
     local tpHits        = params.tphitslanded or 0
-    local extraTPGained = xi.combat.tp.calculateTPGainOnMagicalDamage(dmg, caster, target) * math.max(tpHits - 1, 0) -- Calculate extra TP gained from multihits. takeSpellDamage accounts for one already.
+    local extraTPGained = xi.combat.tp.calculateTPGainOnMagicalDamage(caster, target, dmg) * math.max(tpHits - 1, 0) -- Calculate extra TP gained from multihits. takeSpellDamage accounts for one already.
 
     -- handle MDT, One For All, Liement
     if attackType == xi.attackType.MAGICAL then
-        local absorbOrNullify = xi.spells.damage.calculateNukeAbsorbOrNullify(target, spell:getElement())
-        dmg                   = math.floor(dmg * absorbOrNullify)
+        local absorb   = xi.spells.damage.calculateAbsorption(target, spell:getElement(), true)
+        local nullify  = xi.spells.damage.calculateNullification(target, spell:getElement(), true, false)
+        dmg            = math.floor(dmg * absorb * nullify)
 
         if dmg < 0 then
             target:takeSpellDamage(caster, spell, dmg, attackType, damageType)
@@ -470,19 +653,11 @@ xi.spells.blue.applySpellDamage = function(caster, target, spell, dmg, params, t
             return dmg
         end
 
-        local targetMagicDamageAdjustment = xi.spells.damage.calculateTMDA(target, spell:getElement())
-        dmg                               = math.floor(dmg * targetMagicDamageAdjustment)
-
-        dmg = utils.oneforall(target, dmg)
+        dmg = utils.handleOneForAll(target, dmg)
     end
 
-    -- handle Phalanx
-    if dmg > 0 then
-        dmg = utils.clamp(dmg - target:getMod(xi.mod.PHALANX), 0, 99999)
-    end
-
-    -- handle stoneskin
-    dmg = utils.stoneskin(target, dmg)
+    dmg = utils.handlePhalanx(target, dmg)
+    dmg = utils.handleStoneskin(target, dmg)
 
     -- Check if the mob has a damage cap
     dmg = target:checkDamageCap(dmg)
@@ -519,39 +694,70 @@ xi.spells.blue.calculateDurationWithDiffusion = function(caster, duration)
 end
 
 -- Perform an enfeebling Blue Magic spell
-xi.spells.blue.useEnfeeblingSpell = function(caster, target, spell, params, power, tick, duration, resistThreshold, isGaze, isConal)
-    -- INT and Blue Magic skill are the default resistance modifiers
-    params.diff      = caster:getStat(xi.mod.INT) - target:getStat(xi.mod.INT)
-    params.skillType = xi.skill.BLUE_MAGIC
-    local resist     = applyResistanceEffect(caster, target, spell, params)
+xi.spells.blue.useEnfeeblingSpell = function(caster, target, spell, params)
+    local spellElement = spell:getElement()
+    local effect       = params.effect
+    local tier         = params.tier or 0
 
-    -- If unresisted
-    if resist >= resistThreshold then
+    -- Early return: Out of cone.
+    if
+        params.isConal and
+        not target:isInfront(caster, 32)
+    then
         spell:setMsg(xi.msg.basic.MAGIC_NO_EFFECT)
-
-        -- If this is a conal move, target needs to be in front of caster
-        if
-            not isConal or
-            (isConal and target:isInfront(caster, 64))
-        then
-
-            -- If this is a gaze move, entities need to face each other
-            if
-                not isGaze or
-                (isGaze and target:isFacing(caster) and caster:isFacing(target))
-            then
-
-                -- If status effect was inflicted
-                if target:addStatusEffect(params.effect, power, tick, duration * resist) then
-                    spell:setMsg(xi.msg.basic.MAGIC_ENFEEB_IS)
-                end
-            end
-        end
-    else
-        spell:setMsg(xi.msg.basic.MAGIC_RESIST)
+        return effect
     end
 
-    return params.effect
+    -- Early return: Out of gaze.
+    if
+        params.isGaze and
+        (not target:isFacing(caster) or not caster:isFacing(target))
+    then
+        spell:setMsg(xi.msg.basic.MAGIC_NO_EFFECT)
+        return effect
+    end
+
+    -- Early return: Target is immune.
+    if xi.data.statusEffect.isTargetImmune(target, effect, spellElement) then
+        spell:setMsg(xi.msg.basic.MAGIC_COMPLETE_RESIST)
+        return effect
+    end
+
+    -- Early return: Trait nullification trigger.
+    if xi.data.statusEffect.isTargetResistant(caster, target, effect) then
+        spell:setModifier(xi.msg.actionModifier.RESIST)
+        spell:setMsg(xi.msg.basic.MAGIC_RESIST)
+        return effect
+    end
+
+    -- Early return: Target already has an status effect that nullifies current.
+    if xi.data.statusEffect.isEffectNullified(target, effect, tier) then
+        spell:setMsg(xi.msg.basic.MAGIC_NO_EFFECT)
+        return effect
+    end
+
+    -- Early return: Regular resist.
+    local resist = xi.combat.magicHitRate.calculateResistRate(caster, target, 0, xi.skill.BLUE_MAGIC, 0, spellElement, xi.mod.INT, 0, 0)
+    if resist < params.resistThreshold then
+        spell:setMsg(xi.msg.basic.MAGIC_RESIST)
+        return effect
+    end
+
+    if target:addStatusEffect(effect, { power = params.power, duration = math.floor(params.duration * resist), origin = caster, tick = params.tick }) then
+        -- Add "Magic Burst!" message
+        local _, skillchainCount = xi.magicburst.formMagicBurst(target, spellElement) -- External function. Not present in magic.lua.
+
+        if skillchainCount > 0 then
+            spell:setMsg(xi.msg.basic.MAGIC_BURST_ENFEEB_IS)
+            caster:triggerRoeEvent(xi.roeTrigger.MAGIC_BURST)
+        else
+            spell:setMsg(xi.msg.basic.MAGIC_ENFEEB_IS)
+        end
+    else
+        spell:setMsg(xi.msg.basic.MAGIC_NO_EFFECT)
+    end
+
+    return effect
 end
 
 -- Perform a curative Blue Magic spell
@@ -586,31 +792,34 @@ xi.spells.blue.useCuringSpell = function(caster, target, spell, params)
     return final
 end
 
--- Inflict an added enfeebling effect (after a physical spell)
-xi.spells.blue.usePhysicalSpellAddedEffect = function(caster, target, spell, params, damage, power, tick, duration)
-    -- Physical spell needs to do damage before added effect can hit
-    if damage > 0 then
-        -- INT and Blue Magic skill are the default resistance modifiers
-        params.diff      = caster:getStat(xi.mod.INT) - target:getStat(xi.mod.INT)
-        params.skillType = xi.skill.BLUE_MAGIC
-        local resist     = applyResistanceEffect(caster, target, spell, params)
-
-        if resist >= 0.5 then
-            target:addStatusEffect(params.effect, power, tick, duration * resist)
-        end
+xi.spells.blue.applyBlueAdditionalEffect = function(caster, target, params, effectTable)
+    -- Sanitize parameters.
+    local element = params.damageType and params.damageType - 5 or 0
+    local stat    = params.attribute and params.attribute or xi.mod.INT
+    if params.attackType == xi.attackType.BREATH then
+        stat = 0
     end
-end
 
--- Inflict an added enfeebling effect (after a magical spell)
-xi.spells.blue.useMagicalSpellAddedEffect = function(caster, target, spell, params, power, tick, duration)
-    -- Blue Magic skill + whichever attribute the spell uses will be used as resistance modifiers
-    params.diff      = caster:getStat(params.attribute) - target:getStat(params.attribute)
-    params.skillType = xi.skill.BLUE_MAGIC
-    params.effect    = params.addedEffect -- renamed to avoid magical spells' dmg resistance check being influenced by this
-    local resist     = applyResistanceEffect(caster, target, spell, params)
+    -- Calculate resist and early return.
+    local resist = xi.combat.magicHitRate.calculateResistRate(caster, target, 0, xi.skill.BLUE_MAGIC, 0, element, stat, 0, 0)
 
-    if resist >= 0.5 then
-        target:addStatusEffect(params.effect, power, tick, duration * resist)
+    if resist <= 0.25 then
+        return
+    end
+
+    for entry = 1, #effectTable do
+        local effect   = effectTable[entry][1]
+        local power    = effectTable[entry][2]
+        local tick     = effectTable[entry][3]
+        local duration = effectTable[entry][4]
+
+        if
+            not xi.data.statusEffect.isTargetImmune(target, effect, element) and   -- Target isn't immune.
+            not xi.data.statusEffect.isTargetResistant(caster, target, effect) and -- Target didn't trigger a job trait resistance.
+            not xi.data.statusEffect.isEffectNullified(target, effect, 0)          -- Target doesn't have an status effect that nullifies current. TODO: Tier.
+        then
+            target:addStatusEffect(effect, { power = power, duration = math.floor(duration * resist), origin = caster, tick = tick })
+        end
     end
 end
 
